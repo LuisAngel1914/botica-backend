@@ -5,6 +5,7 @@ use App\Http\Controllers\ReporteMailController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\VentaController;
+use App\Http\Controllers\ReporteController;
 
 Route::post('/enviar-reporte', [ReporteMailController::class, 'enviarReporte']);
 
@@ -15,3 +16,4 @@ Route::post('/usuarios', [UsuarioController::class, 'store']);
 Route::post('/login', [UsuarioController::class, 'login']);
 Route::get('/ventas', [VentaController::class, 'index']);
 Route::post('/ventas', [VentaController::class, 'store']);
+Route::get('/reportes/dashboard', [ReporteController::class, 'dashboard']);
