@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ReporteMailController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\VentaController;
 
 Route::post('/enviar-reporte', [ReporteMailController::class, 'enviarReporte']);
 
@@ -12,3 +13,5 @@ Route::apiResource('productos', ProductoController::class);
 Route::get('/usuarios', [UsuarioController::class, 'index']);
 Route::post('/usuarios', [UsuarioController::class, 'store']);
 Route::post('/login', [UsuarioController::class, 'login']);
+Route::get('/ventas', [VentaController::class, 'index']);
+Route::post('/ventas', [VentaController::class, 'store']);
