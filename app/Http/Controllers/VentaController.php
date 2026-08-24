@@ -9,19 +9,18 @@ use Illuminate\Support\Facades\DB;
 
 class VentaController extends Controller
 {
-    // Listar historial de ventas
     public function index()
     {
         return response()->json(Venta::all(), 200);
     }
 
-    // Registrar una nueva venta y descontar stock
     public function store(Request $request)
     {
         $request->validate([
-            'usuario_id' => 'required|integer',
+            'usuario_id'  => 'required|integer',
             'producto_id' => 'required|integer',
-            'cantidad' => 'required|integer|min:1',
+            'cantidad'    => 'required|integer|min:1',
+            'metodo_pago' => 'nullable|string|in:Efectivo,Yape,Plin,Tarjeta',
         ]);
 
         $producto = Producto::find($request->producto_id);
@@ -37,27 +36,26 @@ class VentaController extends Controller
             ], 400);
         }
 
-        // Transacción para asegurar consistencia
-        DB::transaction(function () use ($request, $producto, &$venta) {
-            $total = $producto->precio_venta * $request->cantidad;
+        $venta = DB::transaction(function () use ($request, $producto) {
+            $totalCalculado = $producto->precio_venta * $request->cantidad;
 
-            // 1. Crear el registro de la venta
-            $venta = Venta::create([
-                'usuario_id' => $request->usuario_id,
-                'producto_id' => $request->producto_id,
-                'cantidad' => $request->cantidad,
-                'precio_unitario' => $producto->precio_venta,
-                'total' => $total,
-                'fecha_venta' => now(),
+            // Si no envían cliente_id, asignamos 1 (Cliente varios / Público general)
+            $nuevaVenta = Venta::create([
+                'usuario_id'  => $request->usuario_id,
+                'cliente_id'  => $request->cliente_id ?? 1,
+                'total'       => $totalCalculado,
+                'metodo_pago' => $request->metodo_pago ?? 'Efectivo',
+                'estado'      => 'completada',
             ]);
 
-            // 2. Descontar el stock del producto
             $producto->decrement('stock_actual', $request->cantidad);
+
+            return $nuevaVenta;
         });
 
         return response()->json([
-            'message' => 'Venta registrada con éxito.',
-            'data' => $venta,
+            'message'     => 'Venta registrada con éxito.',
+            'data'        => $venta,
             'nuevo_stock' => $producto->fresh()->stock_actual
         ], 201);
     }
