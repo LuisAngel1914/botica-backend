@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Botica L&L - Panel de Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-900 text-white p-5 flex flex-col justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-teal-400 mb-8">Botica L&L</h1>
+                <nav class="space-y-4">
+                    <a href="#" onclick="cargarDashboard()" class="block py-2 px-4 rounded hover:bg-slate-800">📊 Dashboard</a>
+                    <a href="#" onclick="cargarProductos()" class="block py-2 px-4 rounded hover:bg-slate-800">💊 Productos</a>
+                </nav>
+            </div>
+            <p class="text-xs text-gray-400">Sistema Botica v1.0</p>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-8 overflow-y-auto">
+            <!-- Métricas -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-red-500">
+                    <h3 class="text-gray-500 text-sm font-semibold">Stock Crítico</h3>
+                    <p id="total-critico" class="text-3xl font-bold text-red-600">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-amber-500">
+                    <h3 class="text-gray-500 text-sm font-semibold">Próximos a Vencer (90 días)</h3>
+                    <p id="total-vencer" class="text-3xl font-bold text-amber-600">0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Tabla de Inventario -->
+                <div class="lg:col-span-2 bg-white rounded-lg shadow-sm p-6">
+                    <h2 class="text-xl font-bold mb-4">Inventario de Medicamentos</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b bg-gray-50 text-gray-600 text-sm">
+                                    <th class="p-3">Código</th>
+                                    <th class="p-3">Producto</th>
+                                    <th class="p-3">Precio</th>
+                                    <th class="p-3">Stock</th>
+                                    <th class="p-3">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-productos">
+                                <tr><td colspan="5" class="p-4 text-center">Cargando datos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Formulario de Venta Rápida -->
+                <div class="bg-white rounded-lg shadow-sm p-6 h-fit">
+                    <h2 class="text-xl font-bold mb-4 text-teal-700">🛒 Nueva Venta</h2>
+                    <form id="form-venta" onsubmit="registrarVenta(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Producto</label>
+                            <select id="select-producto" required class="w-full p-2 border rounded focus:ring-2 focus:ring-teal-500">
+                                <option value="">Cargando productos...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Cantidad</label>
+                            <input type="number" id="input-cantidad" min="1" value="1" required class="w-full p-2 border rounded focus:ring-2 focus:ring-teal-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Método de Pago</label>
+                            <select id="select-pago" class="w-full p-2 border rounded focus:ring-2 focus:ring-teal-500">
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Yape">Yape</option>
+                                <option value="Plin">Plin</option>
+                                <option value="Tarjeta">Tarjeta</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 rounded transition">Procesar Venta</button>
+                    </form>
+                    <div id="mensaje-venta" class="mt-4 text-sm font-semibold hidden p-2 rounded"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api";
+
+        async function cargarDashboard() {
+            try {
+                const res = await fetch(`${API_URL}/reportes/dashboard`);
+                const data = await res.json();
+                document.getElementById('total-critico').innerText = data.alertas.total_stock_critico;
+                document.getElementById('total-vencer').innerText = data.alertas.total_por_vencer;
+            } catch (error) {
+                console.error("Error al cargar alertas:", error);
+            }
+        }
+
+        async function cargarProductos() {
+            try {
+                const res = await fetch(`${API_URL}/productos`);
+                const productos = await res.json();
+                
+                let html = '';
+                let options = '<option value="">Seleccione un producto</option>';
+                
+                productos.forEach(p => {
+                    const alertaStock = p.stock_actual <= p.stock_minimo ? 'bg-red-100 text-red-700 font-bold' : '';
+                    html += `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="p-3">${p.codigo_barras}</td>
+                            <td class="p-3 font-semibold">${p.nombre}</td>
+                            <td class="p-3">S/ ${parseFloat(p.precio_venta).toFixed(2)}</td>
+                            <td class="p-3 ${alertaStock}">${p.stock_actual} (Mín: ${p.stock_minimo})</td>
+                            <td class="p-3"><span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800">${p.estado}</span></td>
+                        </tr>
+                    `;
+                    options += `<option value="${p.id}">${p.nombre} - S/ ${parseFloat(p.precio_venta).toFixed(2)}</option>`;
+                });
+                
+                document.getElementById('tabla-productos').innerHTML = html;
+                document.getElementById('select-producto').innerHTML = options;
+            } catch (error) {
+                console.error("Error al cargar productos:", error);
+            }
+        }
+
+        async function registrarVenta(e) {
+            e.preventDefault();
+            const producto_id = document.getElementById('select-producto').value;
+            const cantidad = document.getElementById('input-cantidad').value;
+            const metodo_pago = document.getElementById('select-pago').value;
+            const msgBox = document.getElementById('mensaje-venta');
+
+            try {
+                const res = await fetch(`${API_URL}/ventas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usuario_id: 1, cliente_id: 1, producto_id, cantidad, metodo_pago })
+                });
+
+                const result = await res.json();
+                msgBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+
+                if (res.ok) {
+                    msgBox.classList.add('bg-green-100', 'text-green-700');
+                    msgBox.innerText = "¡Venta registrada con éxito!";
+                    cargarProductos();
+                    cargarDashboard();
+                } else {
+                    msgBox.classList.add('bg-red-100', 'text-red-700');
+                    msgBox.innerText = result.message || "Error al procesar la venta.";
+                }
+            } catch (error) {
+                console.error("Error en la petición:", error);
+            }
+        }
+
+        cargarDashboard();
+        cargarProductos();
+    </script>
+</body>
+</html>
