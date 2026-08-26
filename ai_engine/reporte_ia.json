@@ -1,0 +1,26 @@
+[
+    {
+        "producto_id":1,
+        "producto_nombre":"Paracetamol 500mg",
+        "cantidad":30,
+        "categoria_abc":"A (Alta Rotaci\u00f3n)",
+        "producto":"Paracetamol 500mg",
+        "demanda_proyectada_mes_siguiente":30
+    },
+    {
+        "producto_id":3,
+        "producto_nombre":"Amoxicilina",
+        "cantidad":20,
+        "categoria_abc":"B (Rotaci\u00f3n Media)",
+        "producto":"Amoxicilina",
+        "demanda_proyectada_mes_siguiente":20
+    },
+    {
+        "producto_id":2,
+        "producto_nombre":"Ibuprofeno 400mg",
+        "cantidad":18,
+        "categoria_abc":"C (Baja Rotaci\u00f3n)",
+        "producto":"Ibuprofeno 400mg",
+        "demanda_proyectada_mes_siguiente":18
+    }
+]

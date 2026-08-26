@@ -2,19 +2,26 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
-     * The attributes that are mass assignable.
+     * Nombre de la tabla asociada en la base de datos.
+     *
+     * @var string
+     */
+    protected $table = 'users';
+
+    /**
+     * Los atributos asignables en masa.
      *
      * @var list<string>
      */
@@ -22,10 +29,12 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'activo',
     ];
 
     /**
-     * The attributes that should be hidden for serialization.
+     * Los atributos ocultos en serializaciones/respuestas JSON.
      *
      * @var list<string>
      */
@@ -35,7 +44,7 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * Atributos con conversión de tipos de datos.
      *
      * @return array<string, string>
      */
@@ -44,6 +53,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'activo' => 'boolean',
         ];
     }
 }
