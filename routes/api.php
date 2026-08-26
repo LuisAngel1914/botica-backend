@@ -10,6 +10,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,6 +30,9 @@ Route::post('/ventas', [VentaController::class, 'store']);
 Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
 Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
 Route::get('/ventas/{id}/ticket', [VentaController::class, 'ticket']);
+
+// Asistente IA (Chatbot Farmacéutico)
+Route::post('/chat', [ChatController::class, 'responder']);
 
 // Exportación y Resumen de Reportes
 Route::get('/reportes/resumen', [ReporteController::class, 'resumen']);
@@ -65,6 +69,9 @@ Route::patch('/usuarios/{id}/toggle', [UserController::class, 'toggleEstado']);
 Route::middleware('auth:sanctum')->group(function () {
     
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Asistente IA (Protegido por token)
+    Route::post('/chat-auth', [ChatController::class, 'responder']);
 
     // Reportes & Alertas
     Route::get('/reportes/dashboard', [ReporteController::class, 'dashboard']);
