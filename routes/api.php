@@ -31,8 +31,9 @@ Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
 Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
 Route::get('/ventas/{id}/ticket', [VentaController::class, 'ticket']);
 
-// Asistente IA (Chatbot Farmacéutico)
+// Asistente IA (Chatbot Farmacéutico Público y Endpoint alternativo)
 Route::post('/chat', [ChatController::class, 'responder']);
+Route::post('chat', [ChatController::class, 'responder']);
 
 // Exportación y Resumen de Reportes
 Route::get('/reportes/resumen', [ReporteController::class, 'resumen']);
@@ -55,7 +56,7 @@ Route::post('/productos', [ProductoController::class, 'store']);
 Route::put('/productos/{id}', [ProductoController::class, 'update']);
 Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
 
-// Gestión de Usuarios (Conectado con UsuariosView.vue)
+// Gestión de Usuarios
 Route::get('/usuarios', [UserController::class, 'index']);
 Route::post('/usuarios', [UserController::class, 'store']);
 Route::patch('/usuarios/{id}/toggle', [UserController::class, 'toggleEstado']);
