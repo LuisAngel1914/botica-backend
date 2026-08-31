@@ -18,27 +18,56 @@ class ChatController extends Controller
             ], 200);
         }
 
-        // Búsqueda directa en la base de datos según lo que consulte el usuario
-        $busqueda = strtolower($mensaje);
-        $productosEncontrados = Producto::whereRaw('LOWER(nombre) LIKE ?', ["%{$busqueda}%"])
-            ->orWhere('codigo_barras', 'LIKE', "%{$busqueda}%")
-            ->take(5)
-            ->get();
+        $mensajeMinuscula = strtolower($mensaje);
 
-        // Obtener la clave de API desde .env si existe
+        // 1. Detección de preguntas ajenas a la botica o farmacia
+        $palabrasProhibidas = [
+            'departamento', 'departamentos', 'peru', 'perú', 'capital', 'clima', 
+            'futbol', 'fútbol', 'musica', 'música', 'pelicula', 'película', 
+            'politica', 'política', 'receta de cocina', 'historia'
+        ];
+
+        foreach ($palabrasProhibidas as $palabra) {
+            if (str_contains($mensajeMinuscula, $palabra)) {
+                return response()->json([
+                    'respuesta' => '🤖 Lo siento, solo puedo responder preguntas relacionadas con la botica, medicamentos, productos en stock, precios y consultas farmacéuticas.'
+                ], 200);
+            }
+        }
+
+        // 2. Extraer palabras clave de búsqueda (omitir conectores comunes)
+        $palabrasOmitir = ['hay', 'productos', 'producto', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'cuanto', 'cuánto', 'cuesta', 'precio', 'tienen', 'tiene', 'sobre', 'que', 'qué', 'en', 'para', 'saber', 'si', 'busco', 'con', 'por', '?'];
+        
+        $tokens = explode(' ', preg_replace('/[^\w\s]/u', '', $mensajeMinuscula));
+        $palabrasClave = array_filter($tokens, function($token) use ($palabrasOmitir) {
+            return !in_array($token, $palabrasOmitir) && strlen($token) > 2;
+        });
+
+        // 3. Buscar productos coincidiendo con las palabras clave extraídas
+        $query = Producto::query();
+        if (!empty($palabrasClave)) {
+            $query->where(function($q) use ($palabrasClave) {
+                foreach ($palabrasClave as $palabra) {
+                    $q->orWhereRaw('LOWER(nombre) LIKE ?', ["%{$palabra}%"])
+                      ->orWhere('codigo_barras', 'LIKE', "%{$palabra}%");
+                }
+            });
+        }
+
+        $productosEncontrados = $query->take(5)->get();
+
+        // 4. Intento de respuesta con la API de Gemini (si la API KEY está configurada)
         $apiKey = env('GEMINI_API_KEY');
-
-        // Si existe la clave de Gemini, intentamos consultar a la IA
         if ($apiKey) {
             try {
                 $catalogo = Producto::select('nombre', 'precio', 'stock')->take(20)->get()->toJson();
                 $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$apiKey}";
 
-                $response = Http::withoutVerifying()->timeout(10)->post($url, [
+                $response = Http::withoutVerifying()->timeout(8)->post($url, [
                     'contents' => [
                         [
                             'parts' => [
-                                ['text' => "Eres un asistente farmacéutico del POS. Productos en sistema: {$catalogo}. Consulta del usuario: {$mensaje}"]
+                                ['text' => "Eres un asistente farmacéutico exclusivo de esta botica. Responde SOLAMENTE temas sobre medicamentos, salud y productos. Si preguntan algo no relacionado a la botica o medicina, di 'Lo siento, solo respondo consultas farmacéuticas o de la botica'. Productos disponibles en sistema: {$catalogo}. Consulta: {$mensaje}"]
                             ]
                         ]
                     ]
@@ -52,31 +81,22 @@ class ChatController extends Controller
                     }
                 }
             } catch (\Throwable $e) {
-                // Si falla la API externa, cae suavemente a la búsqueda local
+                // Fallback automático al motor local
             }
         }
 
-        // Respondedor Local Automático (Si no hay API KEY o si falla Gemini)
+        // 5. Respuesta estructurada del Motor Local
         if ($productosEncontrados->count() > 0) {
-            $txt = "🤖 **Resultados encontrados en tu sistema:**\n\n";
+            $txt = "🤖 **Productos encontrados en el sistema:**\n\n";
             foreach ($productosEncontrados as $prod) {
                 $txt .= "• **{$prod->nombre}** | Stock: {$prod->stock} unidades | Precio: S/ {$prod->precio}\n";
             }
             return response()->json(['respuesta' => $txt], 200);
         }
 
-        // Si no se encontró nada por nombre, mostrar stock general disponible
-        $todos = Producto::take(5)->get();
-        if ($todos->count() > 0) {
-            $txt = "🤖 No encontré coincidencias exactas para \"{$mensaje}\", pero aquí tienes algunos productos disponibles en el POS:\n\n";
-            foreach ($todos as $prod) {
-                $txt .= "• **{$prod->nombre}** | Stock: {$prod->stock} | Precio: S/ {$prod->precio}\n";
-            }
-            return response()->json(['respuesta' => $txt], 200);
-        }
-
+        // Si es una pregunta sobre la botica pero no hay productos coincidentes
         return response()->json([
-            'respuesta' => "🤖 Hola. No tengo productos registrados en la base de datos para mostrarte en este momento."
+            'respuesta' => "🤖 No encontré ningún producto registrado en el sistema que coincida con tu búsqueda. Intenta consultando por el nombre del medicamento o su principio activo."
         ], 200);
     }
 }
