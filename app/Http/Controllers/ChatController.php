@@ -21,7 +21,63 @@ class ChatController extends Controller
         $mensajeMinuscula = strtolower($mensaje);
         $respuestaGenericaRechazo = '🤖 Lo siento, solo puedo responder preguntas relacionadas con la botica, medicamentos, productos en stock, precios y consultas farmacéuticas.';
 
-        // 1. Palabras clave explícitamente farmacéuticas/botica
+        // 1. Detección de intenciones para solicitar el catálogo o productos disponibles
+        $intencionesGeneral = [
+            'productos disponibles', 'productos hay', 'que productos', 'qué productos', 
+            'lista de productos', 'lista', 'catalogo', 'catálogo', 'inventario', 'stock general'
+        ];
+
+        $esConsultaGeneral = false;
+        foreach ($intencionesGeneral as $intencion) {
+            if (str_contains($mensajeMinuscula, $intencion)) {
+                $esConsultaGeneral = true;
+                break;
+            }
+        }
+
+        // Si es una solicitud general de stock/catálogo
+        if ($esConsultaGeneral) {
+            $productos = Producto::take(10)->get();
+            if ($productos->count() > 0) {
+                $txt = "🤖 **Productos disponibles en el sistema:**\n\n";
+                foreach ($productos as $prod) {
+                    $stockVal = $prod->stock_actual ?? $prod->stock_total ?? $prod->stock ?? 0;
+                    $precioVal = $prod->precio ?? $prod->precio_venta ?? 0;
+                    $precioFormateado = number_format((float)$precioVal, 2, '.', '');
+
+                    $txt .= "• **{$prod->nombre}** | Stock: {$stockVal} unidades | Precio: S/ {$precioFormateado}\n";
+                }
+                return response()->json(['respuesta' => $txt], 200);
+            }
+        }
+
+        // 2. Extraer palabras clave para búsquedas específicas
+        $palabrasOmitir = [
+            'hay', 'productos', 'producto', 'disponibles', 'disponible', 'de', 'del', 
+            'la', 'el', 'los', 'las', 'un', 'una', 'cuanto', 'cuánto', 'cuesta', 'precio', 
+            'tienen', 'tiene', 'sobre', 'que', 'qué', 'en', 'para', 'saber', 'si', 'busco', 
+            'con', 'por', 'cuales', 'cuáles', 'cuantos', 'cuántos', 'existen', 'años', 'tienes', '?'
+        ];
+
+        $tokens = explode(' ', preg_replace('/[^\w\s]/u', '', $mensajeMinuscula));
+        $palabrasClave = array_filter($tokens, function($token) use ($palabrasOmitir) {
+            return !in_array($token, $palabrasOmitir) && strlen($token) > 2;
+        });
+
+        // 3. Buscar coincidencias en la base de datos
+        $productosEncontrados = collect();
+        if (!empty($palabrasClave)) {
+            $query = Producto::query();
+            $query->where(function($q) use ($palabrasClave) {
+                foreach ($palabrasClave as $palabra) {
+                    $q->orWhereRaw('LOWER(nombre) LIKE ?', ["%{$palabra}%"])
+                      ->orWhere('codigo_barras', 'LIKE', "%{$palabra}%");
+                }
+            });
+            $productosEncontrados = $query->take(5)->get();
+        }
+
+        // 4. Determinar si la pregunta pertenece al dominio de la botica/farmacia
         $terminosFarmaceuticos = [
             'medicamento', 'medicamentos', 'producto', 'productos', 'precio', 'precios', 
             'cuesta', 'costo', 'stock', 'inventario', 'botica', 'farmacia', 'pastilla', 
@@ -38,28 +94,7 @@ class ChatController extends Controller
             }
         }
 
-        // 2. Extraer tokens para buscar en BD
-        $palabrasOmitir = ['hay', 'productos', 'producto', 'disponibles', 'disponible', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'cuanto', 'cuánto', 'cuesta', 'precio', 'tienen', 'tiene', 'sobre', 'que', 'qué', 'en', 'para', 'saber', 'si', 'busco', 'con', 'por', 'cuales', 'cuáles', 'cuantos', 'cuántos', 'existen', '?'];
-        
-        $tokens = explode(' ', preg_replace('/[^\w\s]/u', '', $mensajeMinuscula));
-        $palabrasClave = array_filter($tokens, function($token) use ($palabrasOmitir) {
-            return !in_array($token, $palabrasOmitir) && strlen($token) > 2;
-        });
-
-        // 3. Consulta a la base de datos de productos
-        $productosEncontrados = collect();
-        if (!empty($palabrasClave)) {
-            $query = Producto::query();
-            $query->where(function($q) use ($palabrasClave) {
-                foreach ($palabrasClave as $palabra) {
-                    $q->orWhereRaw('LOWER(nombre) LIKE ?', ["%{$palabra}%"])
-                      ->orWhere('codigo_barras', 'LIKE', "%{$palabra}%");
-                }
-            });
-            $productosEncontrados = $query->take(5)->get();
-        }
-
-        // 4. Si NO encontró productos y la pregunta NO es sobre temas farmacéuticos -> Rechazar uniformemente
+        // Si NO hay productos encontrados y NO es una consulta farmacéutica -> Rechazar
         if ($productosEncontrados->count() === 0 && !$esConsultaFarmaceutica) {
             return response()->json([
                 'respuesta' => $respuestaGenericaRechazo
@@ -77,7 +112,7 @@ class ChatController extends Controller
                     'contents' => [
                         [
                             'parts' => [
-                                ['text' => "Eres un asistente farmacéutico exclusivo de esta botica. Responde ÚNICAMENTE consultas sobre medicamentos, salud, dosis o productos. Si la pregunta es ajena a la botica o salud, responde exactamente: '{$respuestaGenericaRechazo}'. Catálogo disponible: {$catalogo}. Consulta: {$mensaje}"]
+                                ['text' => "Eres un asistente farmacéutico exclusivo de esta botica. Responde ÚNICAMENTE sobre medicamentos, salud, dosis o productos. Si la pregunta es ajena a la botica o medicina, responde exactamente: '{$respuestaGenericaRechazo}'. Productos en sistema: {$catalogo}. Consulta: {$mensaje}"]
                             ]
                         ]
                     ]
@@ -91,11 +126,11 @@ class ChatController extends Controller
                     }
                 }
             } catch (\Throwable $e) {
-                // Caída al motor local
+                // Fallback automático al motor local
             }
         }
 
-        // 6. Motor Local: Si se encontraron productos en la base de datos
+        // 6. Generación de respuesta con productos encontrados
         if ($productosEncontrados->count() > 0) {
             $txt = "🤖 **Productos encontrados en el sistema:**\n\n";
             foreach ($productosEncontrados as $prod) {
@@ -108,7 +143,7 @@ class ChatController extends Controller
             return response()->json(['respuesta' => $txt], 200);
         }
 
-        // 7. Si era una consulta de botica pero el producto no existe en BD
+        // 7. Respuesta si la consulta era sobre farmacia/botica pero el producto no existe en el catálogo
         return response()->json([
             'respuesta' => "🤖 No encontré ningún producto registrado en el sistema que coincida con tu búsqueda. Intenta consultando por el nombre del medicamento o su principio activo."
         ], 200);
