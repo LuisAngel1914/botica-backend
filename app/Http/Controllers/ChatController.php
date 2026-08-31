@@ -35,7 +35,7 @@ class ChatController extends Controller
             }
         }
 
-        // 2. Extraer palabras clave de búsqueda (omitir conectores comunes)
+        // 2. Extraer palabras clave de búsqueda
         $palabrasOmitir = ['hay', 'productos', 'producto', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'cuanto', 'cuánto', 'cuesta', 'precio', 'tienen', 'tiene', 'sobre', 'que', 'qué', 'en', 'para', 'saber', 'si', 'busco', 'con', 'por', '?'];
         
         $tokens = explode(' ', preg_replace('/[^\w\s]/u', '', $mensajeMinuscula));
@@ -56,11 +56,11 @@ class ChatController extends Controller
 
         $productosEncontrados = $query->take(5)->get();
 
-        // 4. Intento de respuesta con la API de Gemini (si la API KEY está configurada)
+        // 4. Intento de respuesta con la API de Gemini
         $apiKey = env('GEMINI_API_KEY');
         if ($apiKey) {
             try {
-                $catalogo = Producto::select('nombre', 'precio', 'stock')->take(20)->get()->toJson();
+                $catalogo = Producto::select('nombre', 'precio', 'precio_venta', 'stock')->take(20)->get()->toJson();
                 $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$apiKey}";
 
                 $response = Http::withoutVerifying()->timeout(8)->post($url, [
@@ -85,16 +85,22 @@ class ChatController extends Controller
             }
         }
 
-        // 5. Respuesta estructurada del Motor Local
+        // 5. Respuesta estructurada del Motor Local asegurando valores numéricos
         if ($productosEncontrados->count() > 0) {
             $txt = "🤖 **Productos encontrados en el sistema:**\n\n";
             foreach ($productosEncontrados as $prod) {
-                $txt .= "• **{$prod->nombre}** | Stock: {$prod->stock} unidades | Precio: S/ {$prod->precio}\n";
+                // Obtener stock (si es nulo pone 0)
+                $stockVal = $prod->stock ?? 0;
+                
+                // Obtener precio evaluando precio o precio_venta
+                $precioVal = $prod->precio ?? $prod->precio_venta ?? 0;
+                $precioFormateado = number_format((float)$precioVal, 2, '.', '');
+
+                $txt .= "• **{$prod->nombre}** | Stock: {$stockVal} unidades | Precio: S/ {$precioFormateado}\n";
             }
             return response()->json(['respuesta' => $txt], 200);
         }
 
-        // Si es una pregunta sobre la botica pero no hay productos coincidentes
         return response()->json([
             'respuesta' => "🤖 No encontré ningún producto registrado en el sistema que coincida con tu búsqueda. Intenta consultando por el nombre del medicamento o su principio activo."
         ], 200);
