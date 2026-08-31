@@ -21,22 +21,30 @@ class ChatController extends Controller
         $mensajeMinuscula = strtolower($mensaje);
         $respuestaGenericaRechazo = '🤖 Lo siento, solo puedo responder preguntas relacionadas con la botica, medicamentos, productos en stock, precios y consultas farmacéuticas.';
 
-        // 1. Detección de intenciones para solicitar el catálogo o productos disponibles
-        $intencionesGeneral = [
-            'productos disponibles', 'productos hay', 'que productos', 'qué productos', 
-            'lista de productos', 'lista', 'catalogo', 'catálogo', 'inventario', 'stock general'
-        ];
+        // 1. Identificar intenciones abiertas de consultar el catálogo / stock general
+        $palabrasGenerales = ['producto', 'productos', 'catalogo', 'catálogo', 'inventario', 'stock', 'lista', 'disponible', 'disponibles', 'tienen', 'hay'];
+        
+        // Limpiar signos de puntuación
+        $textoLimpio = trim(preg_replace('/[^\w\s]/u', '', $mensajeMinuscula));
+        $tokensTexto = array_filter(explode(' ', $textoLimpio));
 
-        $esConsultaGeneral = false;
-        foreach ($intencionesGeneral as $intencion) {
-            if (str_contains($mensajeMinuscula, $intencion)) {
-                $esConsultaGeneral = true;
-                break;
+        // Verificar si la consulta contiene únicamente palabras de solicitud general
+        $esSolicitudCatalogo = false;
+        if (!empty($tokensTexto)) {
+            $coincidenciasGenerales = 0;
+            foreach ($tokensTexto as $token) {
+                if (in_array($token, $palabrasGenerales) || in_array($token, ['que', 'qué', 'cuantod', 'cuantos', 'cuántos', 'ver', 'mostrar'])) {
+                    $coincidenciasGenerales++;
+                }
+            }
+            // Si todas o la mayoría de las palabras son genéricas de solicitud
+            if ($coincidenciasGenerales >= count($tokensTexto) || str_contains($mensajeMinuscula, 'productos disponibles') || str_contains($mensajeMinuscula, 'que productos')) {
+                $esSolicitudCatalogo = true;
             }
         }
 
-        // Si es una solicitud general de stock/catálogo
-        if ($esConsultaGeneral) {
+        // Si el usuario pide ver el catálogo general
+        if ($esSolicitudCatalogo) {
             $productos = Producto::take(10)->get();
             if ($productos->count() > 0) {
                 $txt = "🤖 **Productos disponibles en el sistema:**\n\n";
@@ -51,20 +59,19 @@ class ChatController extends Controller
             }
         }
 
-        // 2. Extraer palabras clave para búsquedas específicas
+        // 2. Extraer palabras clave especificas para buscar medicamentos concretos
         $palabrasOmitir = [
             'hay', 'productos', 'producto', 'disponibles', 'disponible', 'de', 'del', 
             'la', 'el', 'los', 'las', 'un', 'una', 'cuanto', 'cuánto', 'cuesta', 'precio', 
             'tienen', 'tiene', 'sobre', 'que', 'qué', 'en', 'para', 'saber', 'si', 'busco', 
-            'con', 'por', 'cuales', 'cuáles', 'cuantos', 'cuántos', 'existen', 'años', 'tienes', '?'
+            'con', 'por', 'cuales', 'cuáles', 'cuantos', 'cuántos', 'existen', 'años', 'tienes'
         ];
 
-        $tokens = explode(' ', preg_replace('/[^\w\s]/u', '', $mensajeMinuscula));
-        $palabrasClave = array_filter($tokens, function($token) use ($palabrasOmitir) {
+        $palabrasClave = array_filter($tokensTexto, function($token) use ($palabrasOmitir) {
             return !in_array($token, $palabrasOmitir) && strlen($token) > 2;
         });
 
-        // 3. Buscar coincidencias en la base de datos
+        // 3. Búsqueda específica en base de datos por término
         $productosEncontrados = collect();
         if (!empty($palabrasClave)) {
             $query = Producto::query();
@@ -77,7 +84,7 @@ class ChatController extends Controller
             $productosEncontrados = $query->take(5)->get();
         }
 
-        // 4. Determinar si la pregunta pertenece al dominio de la botica/farmacia
+        // 4. Validar pertenencia al ámbito farmacéutico
         $terminosFarmaceuticos = [
             'medicamento', 'medicamentos', 'producto', 'productos', 'precio', 'precios', 
             'cuesta', 'costo', 'stock', 'inventario', 'botica', 'farmacia', 'pastilla', 
@@ -94,14 +101,14 @@ class ChatController extends Controller
             }
         }
 
-        // Si NO hay productos encontrados y NO es una consulta farmacéutica -> Rechazar
+        // Si no hay productos ni términos farmacéuticos -> Rechazar pregunta ajena
         if ($productosEncontrados->count() === 0 && !$esConsultaFarmaceutica) {
             return response()->json([
                 'respuesta' => $respuestaGenericaRechazo
             ], 200);
         }
 
-        // 5. Intento con Gemini IA (Si existe API KEY)
+        // 5. Integración con Gemini IA (si API KEY está configurada)
         $apiKey = env('GEMINI_API_KEY');
         if ($apiKey) {
             try {
@@ -126,11 +133,11 @@ class ChatController extends Controller
                     }
                 }
             } catch (\Throwable $e) {
-                // Fallback automático al motor local
+                // Fallback automático
             }
         }
 
-        // 6. Generación de respuesta con productos encontrados
+        // 6. Si hubo hallazgos en la búsqueda de productos
         if ($productosEncontrados->count() > 0) {
             $txt = "🤖 **Productos encontrados en el sistema:**\n\n";
             foreach ($productosEncontrados as $prod) {
@@ -143,7 +150,7 @@ class ChatController extends Controller
             return response()->json(['respuesta' => $txt], 200);
         }
 
-        // 7. Respuesta si la consulta era sobre farmacia/botica pero el producto no existe en el catálogo
+        // 7. Si fue una pregunta farmacéutica válida pero el producto no está registrado
         return response()->json([
             'respuesta' => "🤖 No encontré ningún producto registrado en el sistema que coincida con tu búsqueda. Intenta consultando por el nombre del medicamento o su principio activo."
         ], 200);
