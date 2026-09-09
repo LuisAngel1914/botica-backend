@@ -7,6 +7,7 @@ use App\Models\Caja;
 use App\Models\Venta;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use App\Services\ActivityLogger;
 use Carbon\Carbon;
 
 class CajaController extends Controller
@@ -90,6 +91,8 @@ class CajaController extends Controller
             'fecha_apertura' => Carbon::now()
         ]);
 
+        ActivityLogger::log($request, 'cash_register.opened', Caja::class, $caja->id, ['monto_inicial' => (float) $caja->monto_inicial]);
+
         return response()->json([
             'message' => 'Caja abierta correctamente.',
             'caja' => $caja
@@ -135,6 +138,8 @@ class CajaController extends Controller
             'estado' => 'cerrada',
             'fecha_cierre' => Carbon::now()
         ]);
+
+        ActivityLogger::log($request, 'cash_register.closed', Caja::class, $caja->id, ['monto_final' => (float) $request->monto_final, 'diferencia' => $diferencia]);
 
         return response()->json([
             'message' => 'Caja cerrada exitosamente.',
