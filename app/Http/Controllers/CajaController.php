@@ -64,6 +64,13 @@ class CajaController extends Controller
         ], 200);
     }
 
+    public function ultimoCierre()
+    {
+        $caja = Caja::where('estado', 'cerrada')->latest('fecha_cierre')->first();
+        if (!$caja) return response()->json(['message' => 'No hay cierres registrados.'], 404);
+        return response()->json($caja);
+    }
+
     public function abrir(Request $request)
     {
         $cajaAbierta = Caja::where('estado', 'abierta')->first();
