@@ -24,4 +24,9 @@ class Caja extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function correcciones()
+    {
+        return $this->hasMany(CashClosureCorrection::class);
+    }
 }

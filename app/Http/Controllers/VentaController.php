@@ -144,9 +144,10 @@ class VentaController extends Controller
         });
     }
 
-    public function cancelar($id)
+    public function cancelar(Request $request, $id)
     {
-        return DB::transaction(function () use ($id) {
+        $data = $request->validate(['motivo' => 'required|string|min:10|max:1000']);
+        return DB::transaction(function () use ($id, $request, $data) {
             $venta = Venta::with('detalles')->find($id);
 
             if (!$venta) {
@@ -175,7 +176,7 @@ class VentaController extends Controller
 
             $venta->update(['estado' => 'anulada']);
 
-            ActivityLogger::log(request(), 'sale.cancelled', Venta::class, $venta->id, ['total' => (float) $venta->total]);
+            ActivityLogger::log($request, 'sale.cancelled', Venta::class, $venta->id, ['total' => (float) $venta->total, 'motivo' => $data['motivo']]);
 
             return response()->json([
                 'message' => 'Venta anulada correctamente y stock repuesto',
