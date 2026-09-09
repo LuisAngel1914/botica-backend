@@ -2,83 +2,58 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ReporteMailController;
-use App\Http\Controllers\ProductoController;
-use App\Http\Controllers\VentaController;
-use App\Http\Controllers\ReporteController;
-use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CajaController;
-use App\Http\Controllers\InventarioController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\ReporteMailController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VentaController;
 
-/*
-|--------------------------------------------------------------------------
-| Rutas Públicas / POS Operativo
-|--------------------------------------------------------------------------
-*/
 Route::post('/login', [AuthController::class, 'login']);
 
-// Operaciones del POS (Catálogo, Búsqueda de clientes, Emisión y Ticket)
-Route::get('/productos', [ProductoController::class, 'index']);
-Route::get('/productos/buscar/{codigo}', [ProductoController::class, 'buscarPorCodigo']);
-Route::get('/clientes/buscar/{doc}', [ClienteController::class, 'buscarPorDocumento']);
-
-// Historial, Emisión y Anulación de Ventas
-Route::get('/ventas', [VentaController::class, 'index']);
-Route::post('/ventas', [VentaController::class, 'store']);
-Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
-Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
-Route::get('/ventas/{id}/ticket', [VentaController::class, 'ticket']);
-
-// Asistente IA (Chatbot Farmacéutico Público y Endpoint alternativo)
-Route::post('/chat', [ChatController::class, 'responder']);
-Route::post('chat', [ChatController::class, 'responder']);
-
-// Exportación y Resumen de Reportes
-Route::get('/reportes/resumen', [ReporteController::class, 'resumen']);
-Route::get('/reportes/pdf', [ReporteController::class, 'exportarPdf']);
-Route::get('/reportes/excel', [ReporteController::class, 'exportarExcel']);
-
-// Control de Caja
-Route::get('/caja/estado', [CajaController::class, 'estadoActual']);
-Route::post('/caja/abrir', [CajaController::class, 'abrir']);
-Route::post('/caja/cerrar', [CajaController::class, 'cerrar']);
-
-// Control de Inventario
-Route::get('/inventario', [InventarioController::class, 'index']);
-Route::post('/inventario/lote', [InventarioController::class, 'registrarLote']);
-Route::get('/inventario/por-vencer', [InventarioController::class, 'porVencer']);
-
-// Gestión Administrativa de Productos
-Route::get('/productos/alertas', [ProductoController::class, 'alertas']);
-Route::post('/productos', [ProductoController::class, 'store']);
-Route::put('/productos/{id}', [ProductoController::class, 'update']);
-Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
-
-// Gestión de Usuarios
-Route::get('/usuarios', [UserController::class, 'index']);
-Route::post('/usuarios', [UserController::class, 'store']);
-Route::patch('/usuarios/{id}/toggle', [UserController::class, 'toggleEstado']);
-
-
-/*
-|--------------------------------------------------------------------------
-| Rutas Protegidas (Requieren Token Bearer Sanctum)
-|--------------------------------------------------------------------------
-*/
 Route::middleware('auth:sanctum')->group(function () {
-    
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Asistente IA (Protegido por token)
+    // POS: any authenticated operator.
+    Route::get('/productos', [ProductoController::class, 'index']);
+    Route::get('/productos/buscar/{codigo}', [ProductoController::class, 'buscarPorCodigo']);
+    Route::get('/clientes/buscar/{doc}', [ClienteController::class, 'buscarPorDocumento']);
+    Route::apiResource('clientes', ClienteController::class);
+    Route::get('/ventas', [VentaController::class, 'index']);
+    Route::post('/ventas', [VentaController::class, 'store']);
+    Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
+    Route::get('/ventas/{id}/ticket', [VentaController::class, 'ticket']);
+    Route::get('/caja/estado', [CajaController::class, 'estadoActual']);
+    Route::post('/caja/abrir', [CajaController::class, 'abrir']);
+    Route::post('/caja/cerrar', [CajaController::class, 'cerrar']);
+    Route::post('/chat', [ChatController::class, 'responder']);
     Route::post('/chat-auth', [ChatController::class, 'responder']);
 
-    // Reportes & Alertas
-    Route::get('/reportes/dashboard', [ReporteController::class, 'dashboard']);
-    Route::post('/reportes/email', [ReporteController::class, 'enviarCorreo']);
-    Route::post('/enviar-reporte', [ReporteMailController::class, 'enviarReporte']);
+    // Administration: inventory configuration, reporting and user management.
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
 
-    // Clientes CRUD
-    Route::apiResource('clientes', ClienteController::class);
+        Route::get('/inventario', [InventarioController::class, 'index']);
+        Route::post('/inventario/lote', [InventarioController::class, 'registrarLote']);
+        Route::get('/inventario/por-vencer', [InventarioController::class, 'porVencer']);
+
+        Route::get('/productos/alertas', [ProductoController::class, 'alertas']);
+        Route::post('/productos', [ProductoController::class, 'store']);
+        Route::put('/productos/{id}', [ProductoController::class, 'update']);
+        Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+
+        Route::get('/usuarios', [UserController::class, 'index']);
+        Route::post('/usuarios', [UserController::class, 'store']);
+        Route::patch('/usuarios/{id}/toggle', [UserController::class, 'toggleEstado']);
+
+        Route::get('/reportes/resumen', [ReporteController::class, 'resumen']);
+        Route::get('/reportes/dashboard', [ReporteController::class, 'dashboard']);
+        Route::get('/reportes/pdf', [ReporteController::class, 'exportarPdf']);
+        Route::get('/reportes/excel', [ReporteController::class, 'exportarExcel']);
+        Route::post('/reportes/email', [ReporteController::class, 'enviarCorreo']);
+        Route::post('/enviar-reporte', [ReporteMailController::class, 'enviarReporte']);
+    });
 });
