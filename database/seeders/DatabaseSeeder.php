@@ -3,23 +3,41 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
-     * Seed the application's database.
+     * Creates the first administrator only when deployment credentials exist.
+     * This keeps local and production passwords out of source control.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $email = env('ADMIN_EMAIL');
+        $password = env('ADMIN_PASSWORD');
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        if (blank($email) || blank($password)) {
+            $this->command?->warn('Bootstrap administrator skipped: ADMIN_EMAIL or ADMIN_PASSWORD is missing.');
+
+            return;
+        }
+
+        $attributes = [
+            'name' => env('ADMIN_NAME', 'Administrador'),
+            'email' => $email,
+            'password' => Hash::make($password),
+        ];
+
+        if (Schema::hasColumn('users', 'role')) {
+            $attributes['role'] = 'admin';
+        }
+
+        if (Schema::hasColumn('users', 'activo')) {
+            $attributes['activo'] = true;
+        }
+
+        User::updateOrCreate(['email' => $email], $attributes);
     }
 }
