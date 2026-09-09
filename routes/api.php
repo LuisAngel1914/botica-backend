@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
         Route::post('/caja/{caja}/correcciones', [CashClosureCorrectionController::class, 'store']);
+        Route::get('/caja/ultimo-cierre', [CajaController::class, 'ultimoCierre']);
 
         Route::get('/inventario', [InventarioController::class, 'index']);
         Route::post('/inventario/lote', [InventarioController::class, 'registrarLote']);
