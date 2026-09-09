@@ -10,6 +10,7 @@ use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Services\ActivityLogger;
 
 class VentaController extends Controller
 {
@@ -132,6 +133,8 @@ class VentaController extends Controller
                 $venta->detalles()->create($detalle);
             }
 
+            ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar)]);
+
             return response()->json([
                 'message'  => 'Venta registrada con éxito',
                 'venta_id' => $venta->id,
@@ -171,6 +174,8 @@ class VentaController extends Controller
             }
 
             $venta->update(['estado' => 'anulada']);
+
+            ActivityLogger::log(request(), 'sale.cancelled', Venta::class, $venta->id, ['total' => (float) $venta->total]);
 
             return response()->json([
                 'message' => 'Venta anulada correctamente y stock repuesto',
