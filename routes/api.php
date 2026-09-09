@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CajaController;
+use App\Http\Controllers\CashClosureCorrectionController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\InventarioController;
@@ -36,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Administration: inventory configuration, reporting and user management.
     Route::middleware('role:admin')->group(function () {
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
+        Route::post('/caja/{caja}/correcciones', [CashClosureCorrectionController::class, 'store']);
 
         Route::get('/inventario', [InventarioController::class, 'index']);
         Route::post('/inventario/lote', [InventarioController::class, 'registrarLote']);
