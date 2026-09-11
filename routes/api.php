@@ -22,7 +22,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/buscar/{codigo}', [ProductoController::class, 'buscarPorCodigo']);
     Route::get('/clientes/buscar/{doc}', [ClienteController::class, 'buscarPorDocumento']);
-    Route::apiResource('clientes', ClienteController::class);
     Route::get('/ventas', [VentaController::class, 'index']);
     Route::post('/ventas', [VentaController::class, 'store']);
     Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
@@ -34,6 +33,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chat-auth', [ChatController::class, 'responder']);
 
     Route::middleware('role:admin')->group(function () {
+        Route::apiResource('clientes', ClienteController::class)->except(['show', 'destroy']);
+        Route::get('/clientes/{cliente}/resumen', [ClienteController::class, 'resumen']);
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
         Route::post('/caja/{caja}/correcciones', [CashClosureCorrectionController::class, 'store']);
         Route::get('/caja/ultimo-cierre', [CajaController::class, 'ultimoCierre']);

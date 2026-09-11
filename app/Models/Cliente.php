@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class Cliente extends Model
 {
     protected $table = 'clientes';
-    
-    // Desactivar marcas de tiempo automáticas para evitar incompatibilidad con MySQL
     public $timestamps = false;
 
     protected $fillable = [
@@ -18,6 +16,11 @@ class Cliente extends Model
         'direccion',
         'telefono',
         'email',
-        'estado'
+        'estado',
     ];
+
+    public function ventas()
+    {
+        return $this->hasMany(Venta::class, 'cliente_id');
+    }
 }
