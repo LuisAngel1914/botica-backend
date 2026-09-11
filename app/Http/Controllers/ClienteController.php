@@ -64,6 +64,7 @@ class ClienteController extends Controller
         ]);
 
         $cliente = Cliente::create($validated);
+        ActivityLogger::log($request, 'customer.created', Cliente::class, $cliente->id, ['tipo_documento' => $cliente->tipo_documento]);
 
         return response()->json(['message' => 'Cliente registrado con éxito', 'data' => $cliente], 201);
     }
@@ -80,6 +81,7 @@ class ClienteController extends Controller
         ]);
 
         $cliente->update($validated);
+        ActivityLogger::log($request, 'customer.updated', Cliente::class, $cliente->id, ['tipo_documento' => $cliente->tipo_documento]);
 
         return response()->json(['message' => 'Cliente actualizado con éxito', 'data' => $cliente]);
     }
