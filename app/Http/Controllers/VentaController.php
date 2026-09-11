@@ -66,6 +66,7 @@ class VentaController extends Controller
                 // Obtener los lotes con stock ordenados por la fecha de vencimiento más cercana
                 $lotes = Lote::where('producto_id', $producto->id)
                     ->where('stock', '>', 0)
+                    ->whereDate('fecha_vencimiento', '>=', Carbon::today())
                     ->orderBy('fecha_vencimiento', 'asc')
                     ->get();
 
@@ -81,6 +82,10 @@ class VentaController extends Controller
                         $cantidadPendiente -= $lote->stock;
                         $lote->update(['stock' => 0]);
                     }
+                }
+
+                if ($cantidadPendiente > 0) {
+                    throw new \Exception("No hay lotes vigentes suficientes para: {$producto->nombre}");
                 }
 
                 // Descontar del stock general del producto
