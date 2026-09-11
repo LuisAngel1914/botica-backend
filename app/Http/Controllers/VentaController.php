@@ -131,6 +131,13 @@ class VentaController extends Controller
 
             foreach ($detallesParaInsertar as $detalle) {
                 $venta->detalles()->create($detalle);
+                InventoryMovement::create([
+                    'producto_id' => $detalle['producto_id'],
+                    'user_id' => $userId,
+                    'tipo' => 'venta',
+                    'cantidad' => -$detalle['cantidad'],
+                    'referencia' => 'Venta #' . $venta->id,
+                ]);
             }
 
             ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar)]);
@@ -171,6 +178,16 @@ class VentaController extends Controller
                     if ($lote) {
                         $lote->increment('stock', $detalle->cantidad);
                     }
+
+                    InventoryMovement::create([
+                        'producto_id' => $producto->id,
+                        'lote_id' => $lote?->id,
+                        'user_id' => $request->user()->id,
+                        'tipo' => 'anulacion_venta',
+                        'cantidad' => $detalle->cantidad,
+                        'referencia' => 'Venta #' . $venta->id,
+                        'motivo' => $data['motivo'],
+                    ]);
                 }
             }
 
