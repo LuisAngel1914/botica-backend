@@ -7,6 +7,8 @@ use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CashClosureCorrectionController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\CompraController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ReporteController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\ReporteMailController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VentaController;
 
+Route::get('/health', HealthController::class);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
