@@ -33,8 +33,6 @@ class ReporteController extends Controller
             'total_efectivo' => (float) $pagos->get('Efectivo', 0),
             'total_digital' => (float) ($pagos->get('Yape', 0) + $pagos->get('Plin', 0) + $pagos->get('Tarjeta', 0)),
             'top_productos' => $this->topProductosDelMes(),
-            'rentabilidad' => $rentabilidad,
-            'productos_rentables' => $productosRentables,
             'desglose_pagos' => $pagos,
         ]);
     }
@@ -85,6 +83,8 @@ class ReporteController extends Controller
             'productos_stock_critico' => $stockCritico,
             'productos_por_vencer' => $proximosAVencer,
             'top_productos' => $this->topProductosDelMes(),
+            'rentabilidad' => $rentabilidad,
+            'productos_rentables' => $productosRentables,
             'desglose_pagos' => $pagos,
             'ultimas_ventas' => Venta::with('cliente')->where('estado', 'completada')->latest()->take(5)->get(),
         ]);
