@@ -73,7 +73,11 @@ class CompraController extends Controller
                 $subtotal = $detail['cantidad'] * $detail['costo_unitario'];
                 $detalle = DetalleCompra::create([
                     'compra_id' => $compra->id,
-                    ...$detail,
+                    'producto_id' => $detail['producto_id'],
+                    'numero_lote' => $detail['numero_lote'],
+                    'cantidad' => $detail['cantidad'],
+                    'costo_unitario' => $detail['costo_unitario'],
+                    'fecha_vencimiento' => $detail['fecha_vencimiento'],
                     'subtotal' => $subtotal,
                 ]);
                 $lote = Lote::create([
