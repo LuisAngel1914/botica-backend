@@ -36,6 +36,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('clientes', ClienteController::class)->except(['show', 'destroy']);
         Route::get('/clientes/{cliente}/resumen', [ClienteController::class, 'resumen']);
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
+        Route::get('/proveedores', [CompraController::class, 'proveedores']);
+        Route::post('/proveedores', [CompraController::class, 'guardarProveedor']);
+        Route::put('/proveedores/{proveedor}', [CompraController::class, 'guardarProveedor']);
+        Route::get('/compras', [CompraController::class, 'index']);
+        Route::post('/compras', [CompraController::class, 'store']);
         Route::post('/caja/{caja}/correcciones', [CashClosureCorrectionController::class, 'store']);
         Route::get('/caja/ultimo-cierre', [CajaController::class, 'ultimoCierre']);
 
