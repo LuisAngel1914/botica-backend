@@ -66,6 +66,9 @@ class ReporteController extends Controller
             ->limit(5)
             ->get(['id', 'producto_id', 'numero_lote', 'stock', 'fecha_vencimiento']);
 
+        $rentabilidad = $this->rentabilidadMensual($inicioMes);
+        $productosRentables = $this->productosRentablesDelMes($inicioMes);
+
         return response()->json([
             'resumen_caja' => [
                 'ventas_hoy_monto' => (float) (clone $ventasHoy)->sum('total'),
@@ -80,6 +83,8 @@ class ReporteController extends Controller
             'productos_stock_critico' => $stockCritico,
             'productos_por_vencer' => $proximosAVencer,
             'top_productos' => $this->topProductosDelMes(),
+            'rentabilidad' => $rentabilidad,
+            'productos_rentables' => $productosRentables,
             'desglose_pagos' => $pagos,
             'ultimas_ventas' => Venta::with('cliente')->where('estado', 'completada')->latest()->take(5)->get(),
         ]);
@@ -101,6 +106,52 @@ class ReporteController extends Controller
             )
             ->groupBy('productos.id', 'productos.nombre', 'productos.imagen_url')
             ->orderByDesc('unidades')
+            ->limit(5)
+            ->get();
+    }
+
+    private function rentabilidadMensual(Carbon $inicioMes): array
+    {
+        $row = DB::table('detalle_ventas as detalle')
+            ->join('ventas as venta', 'detalle.venta_id', '=', 'venta.id')
+            ->join('productos as producto', 'detalle.producto_id', '=', 'producto.id')
+            ->where('venta.estado', 'completada')
+            ->where('venta.created_at', '>=', $inicioMes)
+            ->selectRaw('
+                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.subtotal ELSE 0 END), 0) as ingresos_confirmados,
+                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.cantidad * detalle.costo_unitario ELSE 0 END), 0) as costos_confirmados,
+                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.subtotal ELSE 0 END), 0) as ingresos_estimados,
+                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.cantidad * producto.precio_compra ELSE 0 END), 0) as costos_estimados
+            ')
+            ->first();
+
+        return [
+            'margen_confirmado' => (float) $row->ingresos_confirmados - (float) $row->costos_confirmados,
+            'margen_estimado_historico' => (float) $row->ingresos_estimados - (float) $row->costos_estimados,
+            'ingresos_confirmados' => (float) $row->ingresos_confirmados,
+            'ingresos_estimados_historico' => (float) $row->ingresos_estimados,
+        ];
+    }
+
+    private function productosRentablesDelMes(Carbon $inicioMes)
+    {
+        return DB::table('detalle_ventas as detalle')
+            ->join('ventas as venta', 'detalle.venta_id', '=', 'venta.id')
+            ->join('productos as producto', 'detalle.producto_id', '=', 'producto.id')
+            ->where('venta.estado', 'completada')
+            ->where('venta.created_at', '>=', $inicioMes)
+            ->select(
+                'producto.id',
+                'producto.nombre',
+                'producto.imagen_url',
+                DB::raw('SUM(detalle.cantidad) as unidades'),
+                DB::raw('SUM(detalle.subtotal) as ingresos'),
+                DB::raw('SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.subtotal - (detalle.cantidad * detalle.costo_unitario) ELSE 0 END) as margen_confirmado'),
+                DB::raw('SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.subtotal - (detalle.cantidad * producto.precio_compra) ELSE 0 END) as margen_estimado_historico'),
+                DB::raw('SUM(CASE WHEN detalle.costo_unitario IS NULL THEN 1 ELSE 0 END) as lineas_estimadas')
+            )
+            ->groupBy('producto.id', 'producto.nombre', 'producto.imagen_url')
+            ->orderByDesc(DB::raw('SUM(detalle.subtotal - (detalle.cantidad * COALESCE(detalle.costo_unitario, producto.precio_compra)))'))
             ->limit(5)
             ->get();
     }

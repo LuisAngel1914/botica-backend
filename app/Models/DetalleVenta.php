@@ -13,6 +13,7 @@ class DetalleVenta extends Model
         'producto_id',
         'cantidad',
         'precio_unitario',
+        'costo_unitario',
         'subtotal',
     ];
 

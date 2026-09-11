@@ -59,6 +59,7 @@ class VentaController extends Controller
                     'producto_id'     => $producto->id,
                     'cantidad'        => $item['cantidad'],
                     'precio_unitario' => $producto->precio_venta,
+                    'costo_unitario' => $producto->precio_compra,
                     'subtotal'        => $subtotal,
                 ];
 
