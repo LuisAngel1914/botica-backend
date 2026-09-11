@@ -66,6 +66,7 @@ class VentaController extends Controller
                 // Obtener los lotes con stock ordenados por la fecha de vencimiento más cercana
                 $lotes = Lote::where('producto_id', $producto->id)
                     ->where('stock', '>', 0)
+                    ->whereDate('fecha_vencimiento', '>=', Carbon::today())
                     ->orderBy('fecha_vencimiento', 'asc')
                     ->get();
 
@@ -81,6 +82,10 @@ class VentaController extends Controller
                         $cantidadPendiente -= $lote->stock;
                         $lote->update(['stock' => 0]);
                     }
+                }
+
+                if ($cantidadPendiente > 0) {
+                    throw new \Exception("No hay lotes vigentes suficientes para: {$producto->nombre}");
                 }
 
                 // Descontar del stock general del producto
@@ -131,6 +136,13 @@ class VentaController extends Controller
 
             foreach ($detallesParaInsertar as $detalle) {
                 $venta->detalles()->create($detalle);
+                InventoryMovement::create([
+                    'producto_id' => $detalle['producto_id'],
+                    'user_id' => $userId,
+                    'tipo' => 'venta',
+                    'cantidad' => -$detalle['cantidad'],
+                    'referencia' => 'Venta #' . $venta->id,
+                ]);
             }
 
             ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar)]);
@@ -171,6 +183,16 @@ class VentaController extends Controller
                     if ($lote) {
                         $lote->increment('stock', $detalle->cantidad);
                     }
+
+                    InventoryMovement::create([
+                        'producto_id' => $producto->id,
+                        'lote_id' => $lote?->id,
+                        'user_id' => $request->user()->id,
+                        'tipo' => 'anulacion_venta',
+                        'cantidad' => $detalle->cantidad,
+                        'referencia' => 'Venta #' . $venta->id,
+                        'motivo' => $data['motivo'],
+                    ]);
                 }
             }
 
