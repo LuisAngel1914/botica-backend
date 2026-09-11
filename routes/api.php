@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/actividad', [ActivityLogController::class, 'index']);
 
         Route::get('/usuarios', [UserController::class, 'index']);
+        Route::get('/usuarios/resumen-operativo', [UserController::class, 'resumenOperativo']);
         Route::post('/usuarios', [UserController::class, 'store']);
         Route::patch('/usuarios/{id}/toggle', [UserController::class, 'toggleEstado']);
 
