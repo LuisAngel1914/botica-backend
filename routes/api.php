@@ -19,7 +19,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // POS: any authenticated operator.
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/buscar/{codigo}', [ProductoController::class, 'buscarPorCodigo']);
     Route::get('/clientes/buscar/{doc}', [ClienteController::class, 'buscarPorDocumento']);
@@ -34,7 +33,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chat', [ChatController::class, 'responder']);
     Route::post('/chat-auth', [ChatController::class, 'responder']);
 
-    // Administration: inventory configuration, reporting and user management.
     Route::middleware('role:admin')->group(function () {
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
         Route::post('/caja/{caja}/correcciones', [CashClosureCorrectionController::class, 'store']);
@@ -43,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/inventario', [InventarioController::class, 'index']);
         Route::post('/inventario/lote', [InventarioController::class, 'registrarLote']);
         Route::get('/inventario/por-vencer', [InventarioController::class, 'porVencer']);
+        Route::get('/inventario/movimientos', [InventarioController::class, 'movimientos']);
 
         Route::get('/productos/alertas', [ProductoController::class, 'alertas']);
         Route::post('/productos', [ProductoController::class, 'store']);
