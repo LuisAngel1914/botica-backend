@@ -79,7 +79,11 @@ class UserController extends Controller
             return response()->json(['message' => 'Debe permanecer al menos un administrador activo.'], 422);
         }
 
-        $usuario->update(['activo' => !$usuario->activo]);
+        $nuevoEstado = !$usuario->activo;
+        $usuario->update(['activo' => $nuevoEstado]);
+        if (!$nuevoEstado) {
+            $usuario->tokens()->delete();
+        }
         ActivityLogger::log($request, 'user.status_changed', User::class, $usuario->id, ['activo' => $usuario->activo]);
 
         return response()->json([
