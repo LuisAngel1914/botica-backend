@@ -20,7 +20,7 @@ class VentaController extends Controller
     public function index()
     {
         try {
-            $ventas = Venta::with(['cliente', 'detalles.producto'])
+            $ventas = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
                 ->orderBy('id', 'desc')
                 ->get();
 
@@ -165,7 +165,7 @@ class VentaController extends Controller
                 'message'  => 'Venta registrada con éxito',
                 'venta_id' => $venta->id,
                 'id'       => $venta->id,
-                'data'     => $venta->load(['cliente', 'detalles.producto'])
+                'data'     => $venta->load(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
             ], 201);
         });
     }
