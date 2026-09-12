@@ -94,6 +94,13 @@
                     <td>{{ $detalle->cantidad }} x S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
                     <td class="text-right">S/ {{ number_format($detalle->subtotal, 2) }}</td>
                 </tr>
+                @if($detalle->asignaciones->isNotEmpty())
+                <tr>
+                    <td colspan="2" style="font-size: 10px;">
+                        Lote(s): {{ $detalle->asignaciones->map(fn ($asignacion) => ($asignacion->lote->numero_lote ?? 'N/D') . ' (' . $asignacion->cantidad . ')')->join(', ') }}
+                    </td>
+                </tr>
+                @endif
                 @endforeach
             </tbody>
         </table>
