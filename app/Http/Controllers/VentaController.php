@@ -11,6 +11,7 @@ use App\Models\InventoryMovement;
 use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use App\Services\ActivityLogger;
 
@@ -51,7 +52,7 @@ class VentaController extends Controller
                 $producto = Producto::lockForUpdate()->findOrFail($item['producto_id']);
 
                 if ($producto->stock_actual < $item['cantidad']) {
-                    throw new \Exception("Stock insuficiente para: {$producto->nombre}");
+                    throw ValidationException::withMessages(['detalles' => "Stock insuficiente para: {$producto->nombre}"]);
                 }
 
                 $subtotal = $producto->precio_venta * $item['cantidad'];
@@ -78,7 +79,7 @@ class VentaController extends Controller
                 }
 
                 if ($cantidadPendiente > 0) {
-                    throw new \Exception("No hay lotes vigentes suficientes para: {$producto->nombre}");
+                    throw ValidationException::withMessages(['detalles' => "No hay lotes vigentes suficientes para: {$producto->nombre}"]);
                 }
 
                 $producto->decrement('stock_actual', $item['cantidad']);
