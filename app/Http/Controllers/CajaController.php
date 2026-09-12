@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Caja;
+use App\Models\DevolucionVenta;
 use App\Models\Venta;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -30,9 +31,11 @@ class CajaController extends Controller
         $fechaInicio = $caja->fecha_apertura ?? $caja->created_at;
         $ventasEfectivo = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
         $ventasDigitales = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', '!=', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
+        $devolucionesEfectivo = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', 'Efectivo'))->sum('total');
+        $devolucionesDigitales = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', '!=', 'Efectivo'))->sum('total');
 
         $montoInicial = (float) $caja->monto_inicial;
-        $totalEfectivo = (float) $ventasEfectivo;
+        $totalEfectivo = (float) $ventasEfectivo - (float) $devolucionesEfectivo;
 
         return response()->json([
             'estado' => 'abierta',
@@ -41,8 +44,10 @@ class CajaController extends Controller
             'fecha_apertura' => Carbon::parse($fechaInicio)->format('d/m/Y, h:i a'),
             'monto_inicial' => $montoInicial,
             'ventas_efectivo' => $totalEfectivo,
-            'ventas_digital' => (float) $ventasDigitales,
-            'ventas_digitales' => (float) $ventasDigitales,
+            'devoluciones_efectivo' => (float) $devolucionesEfectivo,
+            'ventas_digital' => (float) $ventasDigitales - (float) $devolucionesDigitales,
+            'ventas_digitales' => (float) $ventasDigitales - (float) $devolucionesDigitales,
+            'devoluciones_digitales' => (float) $devolucionesDigitales,
             'total_esperado' => $montoInicial + $totalEfectivo,
             'monto_esperado' => $montoInicial + $totalEfectivo,
         ]);
@@ -99,13 +104,17 @@ class CajaController extends Controller
         $fechaInicio = $caja->fecha_apertura ?? $caja->created_at;
         $ventasEfectivo = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
         $ventasDigitales = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', '!=', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
+        $devolucionesEfectivo = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', 'Efectivo'))->sum('total');
+        $devolucionesDigitales = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', '!=', 'Efectivo'))->sum('total');
 
-        $montoEsperado = (float) $caja->monto_inicial + (float) $ventasEfectivo;
+        $ventasEfectivoNetas = (float) $ventasEfectivo - (float) $devolucionesEfectivo;
+        $ventasDigitalesNetas = (float) $ventasDigitales - (float) $devolucionesDigitales;
+        $montoEsperado = (float) $caja->monto_inicial + $ventasEfectivoNetas;
         $diferencia = (float) $request->monto_final - $montoEsperado;
 
         $caja->update([
             'monto_final' => $request->monto_final,
-            'total_ventas_efectivo' => $ventasEfectivo,
+            'total_ventas_efectivo' => $ventasEfectivoNetas,
             'diferencia' => $diferencia,
             'estado' => 'cerrada',
             'fecha_cierre' => Carbon::now(),
@@ -117,8 +126,10 @@ class CajaController extends Controller
             'message' => 'Caja cerrada exitosamente.',
             'resumen' => [
                 'monto_inicial' => (float) $caja->monto_inicial,
-                'ventas_efectivo' => (float) $ventasEfectivo,
-                'ventas_digitales' => (float) $ventasDigitales,
+                'ventas_efectivo' => $ventasEfectivoNetas,
+                'devoluciones_efectivo' => (float) $devolucionesEfectivo,
+                'ventas_digitales' => $ventasDigitalesNetas,
+                'devoluciones_digitales' => (float) $devolucionesDigitales,
                 'monto_esperado' => $montoEsperado,
                 'monto_real' => (float) $request->monto_final,
                 'diferencia' => $diferencia,
