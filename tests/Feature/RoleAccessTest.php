@@ -17,6 +17,11 @@ class RoleAccessTest extends TestCase
         $this->actingAs($cajero, 'sanctum')->getJson('/api/ventas')->assertForbidden();
         $this->actingAs($cajero, 'sanctum')->getJson('/api/ventas/reporte-diario')->assertForbidden();
         $this->actingAs($cajero, 'sanctum')->getJson('/api/usuarios')->assertForbidden();
+        $this->actingAs($cajero, 'sanctum')->postJson('/api/inventario/lotes/1/baja', [
+            'tipo' => 'vencimiento',
+            'cantidad' => 1,
+            'motivo' => 'Prueba de autorización de inventario.',
+        ])->assertForbidden();
     }
 
     public function test_admin_can_access_global_sales_history(): void
