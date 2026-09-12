@@ -235,12 +235,17 @@ class VentaController extends Controller
         ], 200);
     }
 
-    public function ticket($id)
+    public function ticket(Request $request, $id)
     {
         $venta = Venta::with(['cliente', 'detalles.producto'])->find($id);
 
         if (!$venta) {
             return response()->json(['message' => 'Venta no encontrada'], 404);
+        }
+
+        $usuario = $request->user();
+        if ($usuario->role !== 'admin' && $venta->usuario_id !== $usuario->id) {
+            return response()->json(['message' => 'No tienes permiso para consultar este ticket.'], 403);
         }
 
         return view('tickets.venta', compact('venta'));
