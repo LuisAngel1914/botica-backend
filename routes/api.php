@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/inventario', [InventarioController::class, 'index']);
         Route::post('/inventario/lote', [InventarioController::class, 'registrarLote']);
+        Route::post('/inventario/lotes/{lote}/baja', [InventarioController::class, 'registrarBaja']);
         Route::get('/inventario/por-vencer', [InventarioController::class, 'porVencer']);
         Route::get('/inventario/movimientos', [InventarioController::class, 'movimientos']);
 

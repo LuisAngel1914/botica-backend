@@ -54,6 +54,55 @@ class InventarioController extends Controller
         });
     }
 
+    public function registrarBaja(Request $request, Lote $lote)
+    {
+        $data = $request->validate([
+            'tipo' => 'required|in:vencimiento,merma',
+            'cantidad' => 'required|integer|min:1',
+            'motivo' => 'required|string|min:10|max:1000',
+        ]);
+
+        return DB::transaction(function () use ($data, $request, $lote) {
+            $lote = Lote::lockForUpdate()->findOrFail($lote->id);
+            if ($data['cantidad'] > $lote->stock) {
+                return response()->json(['message' => 'La cantidad supera el stock disponible del lote.'], 422);
+            }
+
+            $producto = Producto::lockForUpdate()->findOrFail($lote->producto_id);
+            if ($data['cantidad'] > $producto->stock_actual) {
+                return response()->json(['message' => 'El stock consolidado no permite registrar esta baja.'], 422);
+            }
+
+            $lote->decrement('stock', $data['cantidad']);
+            $producto->decrement('stock_actual', $data['cantidad']);
+
+            $tipoMovimiento = 'baja_' . $data['tipo'];
+            InventoryMovement::create([
+                'producto_id' => $producto->id,
+                'lote_id' => $lote->id,
+                'user_id' => $request->user()->id,
+                'tipo' => $tipoMovimiento,
+                'cantidad' => -$data['cantidad'],
+                'referencia' => 'Lote ' . $lote->numero_lote,
+                'motivo' => $data['motivo'],
+            ]);
+
+            ActivityLogger::log($request, 'inventory.disposed', Lote::class, $lote->id, [
+                'producto' => $producto->nombre,
+                'lote' => $lote->numero_lote,
+                'tipo' => $data['tipo'],
+                'cantidad' => (int) $data['cantidad'],
+                'motivo' => $data['motivo'],
+            ]);
+
+            return response()->json([
+                'message' => 'Baja de inventario registrada correctamente.',
+                'lote' => $lote->fresh(),
+                'producto' => $producto->fresh(),
+            ]);
+        });
+    }
+
     public function porVencer()
     {
         $limite = Carbon::now()->addDays(60);
