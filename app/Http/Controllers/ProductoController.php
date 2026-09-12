@@ -9,18 +9,14 @@ class ProductoController extends Controller
 {
     public function index()
     {
-        $productos = Producto::with(['lotes' => function ($q) {
-            $q->where('stock', '>', 0)->orderBy('fecha_vencimiento', 'asc');
-        }])->get();
+        $productos = $this->catalogoConStockDisponible()->get();
 
         return response()->json($productos, 200);
     }
 
     public function show($id)
     {
-        $producto = Producto::with(['lotes' => function ($q) {
-            $q->where('stock', '>', 0)->orderBy('fecha_vencimiento', 'asc');
-        }])->find($id);
+        $producto = $this->catalogoConStockDisponible()->find($id);
 
         if (!$producto) {
             return response()->json(['message' => 'Producto no encontrado'], 404);
@@ -91,15 +87,23 @@ class ProductoController extends Controller
 
     public function buscarPorCodigo($codigo)
     {
-        $producto = Producto::with(['lotes' => function ($q) {
-            $q->where('stock', '>', 0)->orderBy('fecha_vencimiento', 'asc');
-        }])->where('codigo_barras', $codigo)->first();
+        $producto = $this->catalogoConStockDisponible()->where('codigo_barras', $codigo)->first();
 
         if (!$producto) {
             return response()->json(['message' => 'Producto no encontrado'], 404);
         }
 
         return response()->json($producto, 200);
+    }
+
+    private function catalogoConStockDisponible()
+    {
+        return Producto::with(['lotes' => function ($query) {
+            $query->where('stock', '>', 0)->orderBy('fecha_vencimiento');
+        }])->withSum(['lotes as stock_disponible' => function ($query) {
+            $query->where('stock', '>', 0)
+                ->whereDate('fecha_vencimiento', '>=', now()->toDateString());
+        }], 'stock');
     }
 
     public function alertas()
