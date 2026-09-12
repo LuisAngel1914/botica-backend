@@ -20,7 +20,7 @@ class VentaController extends Controller
     public function index()
     {
         try {
-            $ventas = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
+            $ventas = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote', 'detalles.devoluciones.asignaciones', 'devoluciones.detalles'])
                 ->orderBy('id', 'desc')
                 ->get();
 
@@ -182,6 +182,10 @@ class VentaController extends Controller
 
             if ($venta->estado === 'anulada') {
                 return response()->json(['message' => 'La venta ya se encuentra anulada'], 400);
+            }
+
+            if ($venta->devoluciones()->exists()) {
+                throw ValidationException::withMessages(['venta' => 'Esta venta tiene devoluciones parciales; completa las devoluciones pendientes en lugar de anularla.']);
             }
 
             foreach ($venta->detalles as $detalle) {
