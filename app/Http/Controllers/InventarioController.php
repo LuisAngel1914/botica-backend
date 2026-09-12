@@ -117,11 +117,66 @@ class InventarioController extends Controller
 
     public function movimientos(Request $request)
     {
-        $movimientos = InventoryMovement::with(['producto:id,nombre,imagen_url', 'lote:id,numero_lote', 'user:id,name'])
-            ->when($request->filled('producto_id'), fn ($query) => $query->where('producto_id', $request->producto_id))
-            ->latest()
-            ->paginate(25);
+        $data = $request->validate([
+            'producto_id' => 'nullable|integer|exists:productos,id',
+            'lote_id' => 'nullable|integer|exists:lotes,id',
+            'tipo' => 'nullable|string|max:100',
+            'user_id' => 'nullable|integer|exists:users,id',
+            'fecha_inicio' => 'nullable|date',
+            'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
 
-        return response()->json($movimientos);
+        return response()->json(
+            $this->consultaMovimientos($data)->paginate($data['per_page'] ?? 25)->withQueryString()
+        );
+    }
+
+    public function exportarMovimientos(Request $request)
+    {
+        $data = $request->validate([
+            'producto_id' => 'nullable|integer|exists:productos,id',
+            'lote_id' => 'nullable|integer|exists:lotes,id',
+            'tipo' => 'nullable|string|max:100',
+            'user_id' => 'nullable|integer|exists:users,id',
+            'fecha_inicio' => 'nullable|date',
+            'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
+        ]);
+
+        $movimientos = $this->consultaMovimientos($data)->cursor();
+        $fileName = 'historial-inventario-' . now()->format('Y-m-d-His') . '.csv';
+
+        return response()->streamDownload(function () use ($movimientos) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Fecha', 'Producto', 'Lote', 'Tipo', 'Cantidad', 'Responsable', 'Referencia', 'Motivo']);
+
+            foreach ($movimientos as $movimiento) {
+                fputcsv($output, [
+                    optional($movimiento->created_at)->format('Y-m-d H:i:s'),
+                    $movimiento->producto?->nombre,
+                    $movimiento->lote?->numero_lote,
+                    $movimiento->tipo,
+                    $movimiento->cantidad,
+                    $movimiento->user?->name,
+                    $movimiento->referencia,
+                    $movimiento->motivo,
+                ]);
+            }
+
+            fclose($output);
+        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function consultaMovimientos(array $filters)
+    {
+        return InventoryMovement::with(['producto:id,nombre,imagen_url', 'lote:id,numero_lote', 'user:id,name'])
+            ->when(isset($filters['producto_id']), fn ($query) => $query->where('producto_id', $filters['producto_id']))
+            ->when(isset($filters['lote_id']), fn ($query) => $query->where('lote_id', $filters['lote_id']))
+            ->when(isset($filters['tipo']), fn ($query) => $query->where('tipo', $filters['tipo']))
+            ->when(isset($filters['user_id']), fn ($query) => $query->where('user_id', $filters['user_id']))
+            ->when(isset($filters['fecha_inicio']), fn ($query) => $query->whereDate('created_at', '>=', $filters['fecha_inicio']))
+            ->when(isset($filters['fecha_fin']), fn ($query) => $query->whereDate('created_at', '<=', $filters['fecha_fin']))
+            ->latest();
     }
 }
