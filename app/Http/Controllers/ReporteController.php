@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Caja;
 use App\Models\Cliente;
+use App\Models\DevolucionVenta;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\Venta;
@@ -23,16 +24,14 @@ class ReporteController extends Controller
             ->whereDate('created_at', $hoy)
             ->where('estado', 'completada');
 
-        $pagos = (clone $ventasHoy)
-            ->select('metodo_pago', DB::raw('COALESCE(SUM(total), 0) as monto'))
-            ->groupBy('metodo_pago')
-            ->pluck('monto', 'metodo_pago');
+        $pagos = $this->pagosNetos($ventasHoy, $hoy);
 
         return response()->json([
-            'total_ventas_hoy' => (float) (clone $ventasHoy)->sum('total'),
+            'total_ventas_hoy' => (float) (clone $ventasHoy)->sum('total') - $this->totalDevoluciones($hoy),
             'transacciones_hoy' => (int) (clone $ventasHoy)->count(),
             'total_efectivo' => (float) $pagos->get('Efectivo', 0),
             'total_digital' => (float) ($pagos->get('Yape', 0) + $pagos->get('Plin', 0) + $pagos->get('Tarjeta', 0)),
+            'devoluciones_hoy' => $this->totalDevoluciones($hoy),
             'top_productos' => $this->topProductosDelMes(),
             'desglose_pagos' => $pagos,
         ]);
@@ -47,10 +46,9 @@ class ReporteController extends Controller
             ->whereDate('created_at', $hoy)
             ->where('estado', 'completada');
 
-        $pagos = (clone $ventasHoy)
-            ->select('metodo_pago', DB::raw('COALESCE(SUM(total), 0) as monto'))
-            ->groupBy('metodo_pago')
-            ->pluck('monto', 'metodo_pago');
+        $pagos = $this->pagosNetos($ventasHoy, $hoy);
+        $devolucionesHoy = $this->totalDevoluciones($hoy);
+        $devolucionesMes = $this->totalDevoluciones($inicioMes, false);
 
         $stockCritico = Producto::query()
             ->whereColumn('stock_actual', '<=', 'stock_minimo')
@@ -105,9 +103,11 @@ class ReporteController extends Controller
 
         return response()->json([
             'resumen_caja' => [
-                'ventas_hoy_monto' => (float) (clone $ventasHoy)->sum('total'),
+                'ventas_hoy_monto' => (float) (clone $ventasHoy)->sum('total') - $devolucionesHoy,
                 'ventas_hoy_cantidad' => (int) (clone $ventasHoy)->count(),
-                'ventas_mes_monto' => (float) Venta::where('estado', 'completada')->where('created_at', '>=', $inicioMes)->sum('total'),
+                'ventas_mes_monto' => (float) Venta::where('estado', 'completada')->where('created_at', '>=', $inicioMes)->sum('total') - $devolucionesMes,
+                'devoluciones_hoy' => $devolucionesHoy,
+                'devoluciones_mes' => $devolucionesMes,
                 'total_clientes' => Cliente::count(),
             ],
             'alertas_inventario' => [
@@ -125,6 +125,36 @@ class ReporteController extends Controller
             'desglose_pagos' => $pagos,
             'ultimas_ventas' => Venta::with('cliente')->where('estado', 'completada')->latest()->take(5)->get(),
         ]);
+    }
+
+    private function totalDevoluciones(Carbon $inicio, bool $soloFecha = true): float
+    {
+        $query = DevolucionVenta::query();
+
+        if ($soloFecha) {
+            $query->whereDate('created_at', $inicio);
+        } else {
+            $query->where('created_at', '>=', $inicio);
+        }
+
+        return (float) $query->sum('total');
+    }
+
+    private function pagosNetos($ventas, Carbon $fecha)
+    {
+        $pagos = (clone $ventas)
+            ->select('metodo_pago', DB::raw('COALESCE(SUM(total), 0) as monto'))
+            ->groupBy('metodo_pago')
+            ->pluck('monto', 'metodo_pago');
+
+        $devoluciones = DevolucionVenta::query()
+            ->join('ventas', 'devoluciones_venta.venta_id', '=', 'ventas.id')
+            ->whereDate('devoluciones_venta.created_at', $fecha)
+            ->select('ventas.metodo_pago', DB::raw('COALESCE(SUM(devoluciones_venta.total), 0) as monto'))
+            ->groupBy('ventas.metodo_pago')
+            ->pluck('monto', 'metodo_pago');
+
+        return $pagos->map(fn ($monto, $metodo) => (float) $monto - (float) $devoluciones->get($metodo, 0));
     }
 
     private function topProductosDelMes()
