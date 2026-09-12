@@ -7,6 +7,7 @@ use App\Models\Producto;
 use App\Models\Cliente;
 use App\Models\DetalleVenta;
 use App\Models\DetalleVentaLote;
+use App\Models\DevolucionVenta;
 use App\Models\InventoryMovement;
 use App\Models\Lote;
 use Illuminate\Http\Request;
@@ -122,17 +123,20 @@ class VentaController extends Controller
             }
 
             // 3. Registrar la Venta
-            $ultimoId = Venta::max('id') ?? 0;
-            $numeroComprobante = 'B001-' . str_pad($ultimoId + 1, 6, '0', STR_PAD_LEFT);
             $userId = auth()->id() ?? $request->usuario_id ?? 1;
 
+            // El identificador se deriva del ID persistido para evitar duplicados con ventas simultáneas.
             $venta = Venta::create([
                 'usuario_id'         => $userId,
                 'cliente_id'         => $clienteId,
-                'numero_comprobante' => $numeroComprobante,
+                'numero_comprobante' => null,
                 'total'              => $totalVenta,
                 'metodo_pago'        => $request->metodo_pago ?? 'Efectivo',
                 'estado'             => 'completada',
+            ]);
+
+            $venta->update([
+                'numero_comprobante' => 'B001-' . str_pad($venta->id, 6, '0', STR_PAD_LEFT),
             ]);
 
             foreach ($detallesParaInsertar as $detalle) {
@@ -174,7 +178,12 @@ class VentaController extends Controller
     {
         $data = $request->validate(['motivo' => 'required|string|min:10|max:1000']);
         return DB::transaction(function () use ($id, $request, $data) {
-            $venta = Venta::with('detalles.asignaciones.lote')->find($id);
+            // La misma venta se bloquea también desde la devolución para impedir dobles restituciones.
+            $venta = Venta::query()->lockForUpdate()->find($id);
+
+            if ($venta) {
+                $venta->load('detalles.asignaciones.lote');
+            }
 
             if (!$venta) {
                 return response()->json(['message' => 'Venta no encontrada'], 404);
@@ -260,27 +269,47 @@ class VentaController extends Controller
             ->where('estado', 'completada')
             ->get();
 
-        $totalesPorMetodo = $ventasCompletadas->groupBy('metodo_pago')->map(function ($row) {
-            return $row->sum('total');
-        });
+        $ventasPorMetodo = $ventasCompletadas
+            ->groupBy('metodo_pago')
+            ->map(fn ($ventas) => (float) $ventas->sum('total'));
+
+        $devoluciones = DevolucionVenta::with('venta:id,metodo_pago')
+            ->whereDate('created_at', $fecha)
+            ->get();
+
+        $devolucionesPorMetodo = $devoluciones
+            ->groupBy(fn ($devolucion) => $devolucion->venta?->metodo_pago ?? 'Sin método')
+            ->map(fn ($items) => (float) $items->sum('total'));
+
+        $metodos = $ventasPorMetodo->keys()
+            ->merge($devolucionesPorMetodo->keys())
+            ->unique();
+
+        $totalesPorMetodo = $metodos->mapWithKeys(fn ($metodo) => [
+            $metodo => (float) $ventasPorMetodo->get($metodo, 0) - (float) $devolucionesPorMetodo->get($metodo, 0),
+        ]);
+
+        $totalDevoluciones = (float) $devoluciones->sum('total');
 
         $ventasAnuladas = Venta::whereDate('created_at', $fecha)
             ->where('estado', 'anulada')
             ->count();
 
         return response()->json([
-            'fecha'           => $fecha,
-            'total_general'   => $ventasCompletadas->sum('total'),
-            'cantidad_ventas' => $ventasCompletadas->count(),
-            'ventas_anuladas' => $ventasAnuladas,
-            'desglose_pagos'  => $totalesPorMetodo,
-            'ventas'          => $ventasCompletadas,
+            'fecha'                => $fecha,
+            'total_general'        => (float) $ventasCompletadas->sum('total') - $totalDevoluciones,
+            'cantidad_ventas'      => $ventasCompletadas->count(),
+            'ventas_anuladas'      => $ventasAnuladas,
+            'devoluciones_total'   => $totalDevoluciones,
+            'cantidad_devoluciones' => $devoluciones->count(),
+            'desglose_pagos'       => $totalesPorMetodo,
+            'ventas'               => $ventasCompletadas,
         ], 200);
     }
 
     public function ticket(Request $request, $id)
     {
-        $venta = Venta::with(['cliente', 'detalles.producto'])->find($id);
+        $venta = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])->find($id);
 
         if (!$venta) {
             return response()->json(['message' => 'Venta no encontrada'], 404);
