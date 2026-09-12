@@ -69,6 +69,16 @@ class SaleLotTraceabilityTest extends TestCase
             'cantidad' => -2,
         ]);
 
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/ventas')
+            ->assertOk()
+            ->assertJsonPath('0.detalles.0.asignaciones.0.lote.numero_lote', $loteProximo->numero_lote);
+
+        $this->actingAs($admin, 'sanctum')
+            ->get('/api/ventas/' . $venta->id . '/ticket')
+            ->assertOk()
+            ->assertSee($loteProximo->numero_lote);
+
         $this->actingAs($admin, 'sanctum')->postJson('/api/ventas/' . $venta->id . '/anular', [
             'motivo' => 'El cliente devolvió íntegramente los productos vendidos.',
         ])->assertOk();
