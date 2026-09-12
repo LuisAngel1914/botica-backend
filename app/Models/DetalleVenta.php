@@ -21,4 +21,9 @@ class DetalleVenta extends Model
     {
         return $this->belongsTo(Producto::class);
     }
+
+    public function asignaciones()
+    {
+        return $this->hasMany(DetalleVentaLote::class, 'detalle_venta_id');
+    }
 }

@@ -6,9 +6,12 @@ use App\Models\Venta;
 use App\Models\Producto;
 use App\Models\Cliente;
 use App\Models\DetalleVenta;
+use App\Models\DetalleVentaLote;
+use App\Models\InventoryMovement;
 use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use App\Services\ActivityLogger;
 
@@ -44,53 +47,50 @@ class VentaController extends Controller
             $totalVenta = 0;
             $detallesParaInsertar = [];
 
-            // 1. Procesar Productos y Descuento FEFO
+            // 1. Procesar productos con FEFO y guardar el lote exacto de cada unidad vendida.
             foreach ($request->detalles as $item) {
-                $producto = Producto::findOrFail($item['producto_id']);
+                $producto = Producto::lockForUpdate()->findOrFail($item['producto_id']);
 
                 if ($producto->stock_actual < $item['cantidad']) {
-                    throw new \Exception("Stock insuficiente para: {$producto->nombre}");
+                    throw ValidationException::withMessages(['detalles' => "Stock insuficiente para: {$producto->nombre}"]);
                 }
 
                 $subtotal = $producto->precio_venta * $item['cantidad'];
                 $totalVenta += $subtotal;
+                $cantidadPendiente = $item['cantidad'];
+                $asignaciones = [];
 
-                $detallesParaInsertar[] = [
-                    'producto_id'     => $producto->id,
-                    'cantidad'        => $item['cantidad'],
-                    'precio_unitario' => $producto->precio_venta,
-                    'costo_unitario' => $producto->precio_compra,
-                    'subtotal'        => $subtotal,
-                ];
-
-                // --- LÓGICA FEFO DE LOTES ---
-                // Obtener los lotes con stock ordenados por la fecha de vencimiento más cercana
                 $lotes = Lote::where('producto_id', $producto->id)
                     ->where('stock', '>', 0)
                     ->whereDate('fecha_vencimiento', '>=', Carbon::today())
-                    ->orderBy('fecha_vencimiento', 'asc')
+                    ->orderBy('fecha_vencimiento')
+                    ->lockForUpdate()
                     ->get();
 
-                $cantidadPendiente = $item['cantidad'];
-
                 foreach ($lotes as $lote) {
-                    if ($cantidadPendiente <= 0) break;
-
-                    if ($lote->stock >= $cantidadPendiente) {
-                        $lote->decrement('stock', $cantidadPendiente);
-                        $cantidadPendiente = 0;
-                    } else {
-                        $cantidadPendiente -= $lote->stock;
-                        $lote->update(['stock' => 0]);
+                    if ($cantidadPendiente <= 0) {
+                        break;
                     }
+
+                    $cantidadAsignada = min($lote->stock, $cantidadPendiente);
+                    $lote->decrement('stock', $cantidadAsignada);
+                    $cantidadPendiente -= $cantidadAsignada;
+                    $asignaciones[] = ['lote_id' => $lote->id, 'cantidad' => $cantidadAsignada];
                 }
 
                 if ($cantidadPendiente > 0) {
-                    throw new \Exception("No hay lotes vigentes suficientes para: {$producto->nombre}");
+                    throw ValidationException::withMessages(['detalles' => "No hay lotes vigentes suficientes para: {$producto->nombre}"]);
                 }
 
-                // Descontar del stock general del producto
                 $producto->decrement('stock_actual', $item['cantidad']);
+                $detallesParaInsertar[] = [
+                    'producto_id' => $producto->id,
+                    'cantidad' => $item['cantidad'],
+                    'precio_unitario' => $producto->precio_venta,
+                    'costo_unitario' => $producto->precio_compra,
+                    'subtotal' => $subtotal,
+                    'asignaciones' => $asignaciones,
+                ];
             }
 
             // 2. Lógica Automática de Cliente
@@ -136,17 +136,30 @@ class VentaController extends Controller
             ]);
 
             foreach ($detallesParaInsertar as $detalle) {
-                $venta->detalles()->create($detalle);
-                InventoryMovement::create([
-                    'producto_id' => $detalle['producto_id'],
-                    'user_id' => $userId,
-                    'tipo' => 'venta',
-                    'cantidad' => -$detalle['cantidad'],
-                    'referencia' => 'Venta #' . $venta->id,
-                ]);
+                $asignaciones = $detalle['asignaciones'];
+                unset($detalle['asignaciones']);
+
+                $detalleVenta = $venta->detalles()->create($detalle);
+
+                foreach ($asignaciones as $asignacion) {
+                    DetalleVentaLote::create([
+                        'detalle_venta_id' => $detalleVenta->id,
+                        'lote_id' => $asignacion['lote_id'],
+                        'cantidad' => $asignacion['cantidad'],
+                    ]);
+
+                    InventoryMovement::create([
+                        'producto_id' => $detalle['producto_id'],
+                        'lote_id' => $asignacion['lote_id'],
+                        'user_id' => $userId,
+                        'tipo' => 'venta',
+                        'cantidad' => -$asignacion['cantidad'],
+                        'referencia' => 'Venta #' . $venta->id,
+                    ]);
+                }
             }
 
-            ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar)]);
+            ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar), 'lotes_asignados' => true]);
 
             return response()->json([
                 'message'  => 'Venta registrada con éxito',
@@ -161,7 +174,7 @@ class VentaController extends Controller
     {
         $data = $request->validate(['motivo' => 'required|string|min:10|max:1000']);
         return DB::transaction(function () use ($id, $request, $data) {
-            $venta = Venta::with('detalles')->find($id);
+            $venta = Venta::with('detalles.asignaciones.lote')->find($id);
 
             if (!$venta) {
                 return response()->json(['message' => 'Venta no encontrada'], 404);
@@ -172,34 +185,60 @@ class VentaController extends Controller
             }
 
             foreach ($venta->detalles as $detalle) {
-                $producto = Producto::find($detalle->producto_id);
-                if ($producto) {
-                    $producto->increment('stock_actual', $detalle->cantidad);
+                $producto = Producto::lockForUpdate()->find($detalle->producto_id);
+                if (!$producto) {
+                    continue;
+                }
 
-                    // Devolver stock al lote más reciente al anular la venta
-                    $lote = Lote::where('producto_id', $producto->id)
-                        ->orderBy('fecha_vencimiento', 'desc')
-                        ->first();
+                $producto->increment('stock_actual', $detalle->cantidad);
+                $asignaciones = $detalle->asignaciones;
 
-                    if ($lote) {
-                        $lote->increment('stock', $detalle->cantidad);
+                if ($asignaciones->isNotEmpty()) {
+                    foreach ($asignaciones as $asignacion) {
+                        $lote = Lote::lockForUpdate()->find($asignacion->lote_id);
+                        if (!$lote) {
+                            continue;
+                        }
+
+                        $lote->increment('stock', $asignacion->cantidad);
+                        InventoryMovement::create([
+                            'producto_id' => $producto->id,
+                            'lote_id' => $lote->id,
+                            'user_id' => $request->user()->id,
+                            'tipo' => 'anulacion_venta',
+                            'cantidad' => $asignacion->cantidad,
+                            'referencia' => 'Venta #' . $venta->id,
+                            'motivo' => $data['motivo'],
+                        ]);
                     }
 
-                    InventoryMovement::create([
-                        'producto_id' => $producto->id,
-                        'lote_id' => $lote?->id,
-                        'user_id' => $request->user()->id,
-                        'tipo' => 'anulacion_venta',
-                        'cantidad' => $detalle->cantidad,
-                        'referencia' => 'Venta #' . $venta->id,
-                        'motivo' => $data['motivo'],
-                    ]);
+                    continue;
                 }
+
+                // Compatibilidad: las ventas históricas no tenían asignación por lote.
+                $lote = Lote::where('producto_id', $producto->id)
+                    ->orderByDesc('fecha_vencimiento')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($lote) {
+                    $lote->increment('stock', $detalle->cantidad);
+                }
+
+                InventoryMovement::create([
+                    'producto_id' => $producto->id,
+                    'lote_id' => $lote?->id,
+                    'user_id' => $request->user()->id,
+                    'tipo' => 'anulacion_venta',
+                    'cantidad' => $detalle->cantidad,
+                    'referencia' => 'Venta #' . $venta->id,
+                    'motivo' => $data['motivo'] . ' (venta histórica sin lote asignado)',
+                ]);
             }
 
             $venta->update(['estado' => 'anulada']);
 
-            ActivityLogger::log($request, 'sale.cancelled', Venta::class, $venta->id, ['total' => (float) $venta->total, 'motivo' => $data['motivo']]);
+            ActivityLogger::log($request, 'sale.cancelled', Venta::class, $venta->id, ['total' => (float) $venta->total, 'motivo' => $data['motivo'], 'lotes_restaurados' => true]);
 
             return response()->json([
                 'message' => 'Venta anulada correctamente y stock repuesto',
