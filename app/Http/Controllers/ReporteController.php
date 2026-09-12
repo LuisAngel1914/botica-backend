@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Caja;
 use App\Models\Cliente;
 use App\Models\Lote;
 use App\Models\Producto;
@@ -66,6 +67,39 @@ class ReporteController extends Controller
             ->limit(5)
             ->get(['id', 'producto_id', 'numero_lote', 'stock', 'fecha_vencimiento']);
 
+        $vencidos = Lote::query()
+            ->with('producto:id,nombre,imagen_url')
+            ->where('stock', '>', 0)
+            ->whereDate('fecha_vencimiento', '<', $hoy)
+            ->orderBy('fecha_vencimiento')
+            ->limit(5)
+            ->get(['id', 'producto_id', 'numero_lote', 'stock', 'fecha_vencimiento']);
+
+        $cajaActiva = Caja::with('usuario:id,name')->where('estado', 'abierta')->latest()->first();
+        $estadoCaja = [
+            'estado' => 'cerrada',
+            'mensaje' => 'No hay caja abierta actualmente.',
+        ];
+
+        if ($cajaActiva) {
+            $fechaApertura = $cajaActiva->fecha_apertura ?? $cajaActiva->created_at;
+            $ventasEfectivoCaja = (float) Venta::query()
+                ->where('created_at', '>=', $fechaApertura)
+                ->where('metodo_pago', 'Efectivo')
+                ->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))
+                ->sum('total');
+
+            $estadoCaja = [
+                'estado' => 'abierta',
+                'caja_id' => $cajaActiva->id,
+                'responsable' => $cajaActiva->usuario?->name ?? 'Operador',
+                'fecha_apertura' => Carbon::parse($fechaApertura)->toIso8601String(),
+                'monto_inicial' => (float) $cajaActiva->monto_inicial,
+                'ventas_efectivo' => $ventasEfectivoCaja,
+                'monto_esperado' => (float) $cajaActiva->monto_inicial + $ventasEfectivoCaja,
+            ];
+        }
+
         $rentabilidad = $this->rentabilidadMensual($inicioMes);
         $productosRentables = $this->productosRentablesDelMes($inicioMes);
 
@@ -79,9 +113,12 @@ class ReporteController extends Controller
             'alertas_inventario' => [
                 'total_stock_critico' => Producto::whereColumn('stock_actual', '<=', 'stock_minimo')->count(),
                 'total_por_vencer' => Lote::where('stock', '>', 0)->whereDate('fecha_vencimiento', '>=', $hoy)->whereDate('fecha_vencimiento', '<=', Carbon::now()->addDays(60))->count(),
+                'total_vencidos' => Lote::where('stock', '>', 0)->whereDate('fecha_vencimiento', '<', $hoy)->count(),
             ],
+            'estado_caja' => $estadoCaja,
             'productos_stock_critico' => $stockCritico,
             'productos_por_vencer' => $proximosAVencer,
+            'productos_vencidos' => $vencidos,
             'top_productos' => $this->topProductosDelMes(),
             'rentabilidad' => $rentabilidad,
             'productos_rentables' => $productosRentables,
