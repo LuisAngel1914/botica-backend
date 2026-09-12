@@ -21,6 +21,8 @@ class RoleAccessTest extends TestCase
         $this->actingAs($cajero, 'sanctum')->getJson('/api/ventas')->assertForbidden();
         $this->actingAs($cajero, 'sanctum')->getJson('/api/ventas/reporte-diario')->assertForbidden();
         $this->actingAs($cajero, 'sanctum')->getJson('/api/usuarios')->assertForbidden();
+        $this->actingAs($cajero, 'sanctum')->getJson('/api/inventario/movimientos')->assertForbidden();
+        $this->actingAs($cajero, 'sanctum')->getJson('/api/inventario/movimientos/exportar')->assertForbidden();
         $this->actingAs($cajero, 'sanctum')->postJson('/api/inventario/lotes/' . $lote->id . '/baja', [
             'tipo' => 'vencimiento',
             'cantidad' => 1,
@@ -56,6 +58,34 @@ class RoleAccessTest extends TestCase
             'tipo' => 'baja_vencimiento',
             'cantidad' => -2,
         ]);
+    }
+
+    public function test_admin_can_filter_and_export_inventory_movement_history(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'activo' => true]);
+        $lote = $this->crearLoteConStock();
+
+        InventoryMovement::create([
+            'producto_id' => $lote->producto_id,
+            'lote_id' => $lote->id,
+            'user_id' => $admin->id,
+            'tipo' => 'entrada_lote',
+            'cantidad' => 5,
+            'referencia' => $lote->numero_lote,
+            'motivo' => 'Ingreso inicial para prueba de auditoría.',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/inventario/movimientos?producto_id=' . $lote->producto_id . '&lote_id=' . $lote->id . '&tipo=entrada_lote&user_id=' . $admin->id)
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.lote.numero_lote', $lote->numero_lote)
+            ->assertJsonPath('data.0.user.id', $admin->id);
+
+        $this->actingAs($admin, 'sanctum')
+            ->get('/api/inventario/movimientos/exportar?producto_id=' . $lote->producto_id)
+            ->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 
     private function crearLoteConStock(): Lote
