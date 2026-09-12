@@ -25,9 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/buscar/{codigo}', [ProductoController::class, 'buscarPorCodigo']);
     Route::get('/clientes/buscar/{doc}', [ClienteController::class, 'buscarPorDocumento']);
-    Route::get('/ventas', [VentaController::class, 'index']);
     Route::post('/ventas', [VentaController::class, 'store']);
-    Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
     Route::get('/ventas/{id}/ticket', [VentaController::class, 'ticket']);
     Route::get('/caja/estado', [CajaController::class, 'estadoActual']);
     Route::post('/caja/abrir', [CajaController::class, 'abrir']);
@@ -38,6 +36,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::apiResource('clientes', ClienteController::class)->except(['show', 'destroy']);
         Route::get('/clientes/{cliente}/resumen', [ClienteController::class, 'resumen']);
+        Route::get('/ventas', [VentaController::class, 'index']);
+        Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
         Route::get('/proveedores', [CompraController::class, 'proveedores']);
         Route::post('/proveedores', [CompraController::class, 'guardarProveedor']);
