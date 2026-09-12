@@ -109,7 +109,7 @@ class SaleLotTraceabilityTest extends TestCase
 
         $this->actingAs($cajero, 'sanctum')->postJson('/api/ventas', [
             'detalles' => [['producto_id' => $producto->id, 'cantidad' => 1]],
-        ])->assertStatus(500);
+        ])->assertUnprocessable();
 
         $this->assertSame(1, $producto->fresh()->stock_actual);
     }
