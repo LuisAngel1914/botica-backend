@@ -5,6 +5,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CashClosureCorrectionController;
+use App\Http\Controllers\DevolucionVentaController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
@@ -39,6 +40,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/ventas', [VentaController::class, 'index']);
         Route::get('/ventas/reporte-diario', [VentaController::class, 'reporteDiario']);
         Route::post('/ventas/{id}/anular', [VentaController::class, 'cancelar']);
+        Route::post('/ventas/{venta}/devoluciones', [DevolucionVentaController::class, 'store']);
         Route::get('/proveedores', [CompraController::class, 'proveedores']);
         Route::post('/proveedores', [CompraController::class, 'guardarProveedor']);
         Route::put('/proveedores/{proveedor}', [CompraController::class, 'guardarProveedor']);
