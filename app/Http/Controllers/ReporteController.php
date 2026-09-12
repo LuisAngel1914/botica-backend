@@ -179,24 +179,32 @@ class ReporteController extends Controller
 
     private function rentabilidadMensual(Carbon $inicioMes): array
     {
-        $row = DB::table('detalle_ventas as detalle')
+        $ventas = DB::table('detalle_ventas as detalle')
             ->join('ventas as venta', 'detalle.venta_id', '=', 'venta.id')
             ->join('productos as producto', 'detalle.producto_id', '=', 'producto.id')
             ->where('venta.estado', 'completada')
             ->where('venta.created_at', '>=', $inicioMes)
-            ->selectRaw('
-                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.subtotal ELSE 0 END), 0) as ingresos_confirmados,
-                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.cantidad * detalle.costo_unitario ELSE 0 END), 0) as costos_confirmados,
-                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.subtotal ELSE 0 END), 0) as ingresos_estimados,
-                COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.cantidad * producto.precio_compra ELSE 0 END), 0) as costos_estimados
-            ')
+            ->selectRaw('COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.subtotal ELSE 0 END), 0) as ingresos_confirmados, COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle.cantidad * detalle.costo_unitario ELSE 0 END), 0) as costos_confirmados, COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.subtotal ELSE 0 END), 0) as ingresos_estimados, COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle.cantidad * producto.precio_compra ELSE 0 END), 0) as costos_estimados')
             ->first();
 
+        $devoluciones = DB::table('detalle_devoluciones_venta as detalle_devolucion')
+            ->join('devoluciones_venta as devolucion', 'detalle_devolucion.devolucion_venta_id', '=', 'devolucion.id')
+            ->join('detalle_ventas as detalle', 'detalle_devolucion.detalle_venta_id', '=', 'detalle.id')
+            ->join('productos as producto', 'detalle.producto_id', '=', 'producto.id')
+            ->where('devolucion.created_at', '>=', $inicioMes)
+            ->selectRaw('COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle_devolucion.subtotal ELSE 0 END), 0) as ingresos_confirmados, COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NOT NULL THEN detalle_devolucion.cantidad * detalle.costo_unitario ELSE 0 END), 0) as costos_confirmados, COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle_devolucion.subtotal ELSE 0 END), 0) as ingresos_estimados, COALESCE(SUM(CASE WHEN detalle.costo_unitario IS NULL THEN detalle_devolucion.cantidad * producto.precio_compra ELSE 0 END), 0) as costos_estimados')
+            ->first();
+
+        $ingresosConfirmados = (float) $ventas->ingresos_confirmados - (float) $devoluciones->ingresos_confirmados;
+        $costosConfirmados = (float) $ventas->costos_confirmados - (float) $devoluciones->costos_confirmados;
+        $ingresosEstimados = (float) $ventas->ingresos_estimados - (float) $devoluciones->ingresos_estimados;
+        $costosEstimados = (float) $ventas->costos_estimados - (float) $devoluciones->costos_estimados;
+
         return [
-            'margen_confirmado' => (float) $row->ingresos_confirmados - (float) $row->costos_confirmados,
-            'margen_estimado_historico' => (float) $row->ingresos_estimados - (float) $row->costos_estimados,
-            'ingresos_confirmados' => (float) $row->ingresos_confirmados,
-            'ingresos_estimados_historico' => (float) $row->ingresos_estimados,
+            'margen_confirmado' => $ingresosConfirmados - $costosConfirmados,
+            'margen_estimado_historico' => $ingresosEstimados - $costosEstimados,
+            'ingresos_confirmados' => $ingresosConfirmados,
+            'ingresos_estimados_historico' => $ingresosEstimados,
         ];
     }
 
