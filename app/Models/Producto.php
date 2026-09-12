@@ -34,6 +34,7 @@ class Producto extends Model
         'precio_venta'    => 'float',
         'precio_compra'   => 'float',
         'stock_actual'    => 'integer',
+        'stock_disponible' => 'integer',
     ];
 
     // Relación con el modelo Lote

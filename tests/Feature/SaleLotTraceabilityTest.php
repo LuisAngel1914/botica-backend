@@ -123,4 +123,35 @@ class SaleLotTraceabilityTest extends TestCase
 
         $this->assertSame(1, $producto->fresh()->stock_actual);
     }
+
+    public function test_catalog_exposes_only_current_sellable_stock(): void
+    {
+        $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+        $producto = Producto::create([
+            'codigo_barras' => 'DISP-001',
+            'nombre' => 'Producto con lote vencido',
+            'precio_compra' => 5,
+            'precio_venta' => 10,
+            'stock_actual' => 5,
+            'stock_minimo' => 1,
+        ]);
+        Lote::create([
+            'producto_id' => $producto->id,
+            'numero_lote' => 'LOTE-VENCIDO-DISP',
+            'stock' => 3,
+            'fecha_vencimiento' => now()->subDay()->toDateString(),
+        ]);
+        Lote::create([
+            'producto_id' => $producto->id,
+            'numero_lote' => 'LOTE-VIGENTE-DISP',
+            'stock' => 2,
+            'fecha_vencimiento' => now()->addDays(10)->toDateString(),
+        ]);
+
+        $this->actingAs($cajero, 'sanctum')
+            ->getJson('/api/productos')
+            ->assertOk()
+            ->assertJsonPath('0.stock_actual', 5)
+            ->assertJsonPath('0.stock_disponible', 2);
+    }
 }
