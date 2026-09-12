@@ -81,11 +81,18 @@ class ReporteController extends Controller
 
         if ($cajaActiva) {
             $fechaApertura = $cajaActiva->fecha_apertura ?? $cajaActiva->created_at;
-            $ventasEfectivoCaja = (float) Venta::query()
+            $ventasEfectivoBrutas = (float) Venta::query()
                 ->where('created_at', '>=', $fechaApertura)
                 ->where('metodo_pago', 'Efectivo')
                 ->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))
                 ->sum('total');
+
+            $devolucionesEfectivo = (float) DevolucionVenta::query()
+                ->where('created_at', '>=', $fechaApertura)
+                ->whereHas('venta', fn ($query) => $query->where('metodo_pago', 'Efectivo'))
+                ->sum('total');
+
+            $ventasEfectivoNetas = $ventasEfectivoBrutas - $devolucionesEfectivo;
 
             $estadoCaja = [
                 'estado' => 'abierta',
@@ -93,8 +100,9 @@ class ReporteController extends Controller
                 'responsable' => $cajaActiva->usuario?->name ?? 'Operador',
                 'fecha_apertura' => Carbon::parse($fechaApertura)->toIso8601String(),
                 'monto_inicial' => (float) $cajaActiva->monto_inicial,
-                'ventas_efectivo' => $ventasEfectivoCaja,
-                'monto_esperado' => (float) $cajaActiva->monto_inicial + $ventasEfectivoCaja,
+                'ventas_efectivo' => $ventasEfectivoNetas,
+                'devoluciones_efectivo' => $devolucionesEfectivo,
+                'monto_esperado' => (float) $cajaActiva->monto_inicial + $ventasEfectivoNetas,
             ];
         }
 
