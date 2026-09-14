@@ -29,6 +29,11 @@ class Venta extends Model
         return $this->hasMany(DetalleVenta::class, 'venta_id');
     }
 
+    public function receta()
+    {
+        return $this->hasOne(RecetaVenta::class, 'venta_id');
+    }
+
     public function devoluciones()
     {
         return $this->hasMany(DevolucionVenta::class, 'venta_id');
