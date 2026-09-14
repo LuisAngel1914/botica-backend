@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Caja;
 use App\Models\DetalleVentaLote;
 use App\Models\InventoryMovement;
 use App\Models\Lote;
@@ -19,6 +20,12 @@ class SaleLotTraceabilityTest extends TestCase
     {
         $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
         $admin = User::factory()->create(['role' => 'admin', 'activo' => true]);
+        Caja::create([
+            'usuario_id' => $cajero->id,
+            'monto_inicial' => 0,
+            'estado' => 'abierta',
+            'fecha_apertura' => now()->subMinute(),
+        ]);
         $producto = Producto::create([
             'codigo_barras' => 'TRAZA-001',
             'nombre' => 'Producto trazable',
@@ -102,6 +109,12 @@ class SaleLotTraceabilityTest extends TestCase
     public function test_sale_rejects_stock_that_only_exists_in_expired_lots(): void
     {
         $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+        Caja::create([
+            'usuario_id' => $cajero->id,
+            'monto_inicial' => 0,
+            'estado' => 'abierta',
+            'fecha_apertura' => now()->subMinute(),
+        ]);
         $producto = Producto::create([
             'codigo_barras' => 'VENC-001',
             'nombre' => 'Producto vencido',
