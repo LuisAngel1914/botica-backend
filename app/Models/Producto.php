@@ -24,6 +24,7 @@ class Producto extends Model
         'stock_minimo',
         'fecha_vencimiento',
         'requiere_receta',
+        'condicion_venta',
         'imagen_url',
         'estado'
     ];
