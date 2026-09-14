@@ -68,6 +68,7 @@ class VentaController extends Controller
     {
         $request->validate([
             'usuario_id'             => 'nullable|integer',
+            'idempotency_key'         => 'required|uuid',
             'cliente_id'             => 'nullable|integer|exists:clientes,id',
             'cliente_datos'           => 'nullable|array',
             'metodo_pago'            => 'nullable|in:Efectivo,Yape,Plin,Tarjeta',
@@ -83,8 +84,25 @@ class VentaController extends Controller
             'detalles.*.cantidad'    => 'required|integer|min:1',
         ]);
 
-        return DB::transaction(function () use ($request) {
+        $userId = $request->user()->id;
+
+        return DB::transaction(function () use ($request, $userId) {
             DB::table('operational_locks')->where('name', 'cash_register')->lockForUpdate()->firstOrFail();
+
+            $ventaExistente = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
+                ->where('usuario_id', $userId)
+                ->where('idempotency_key', $request->idempotency_key)
+                ->first();
+
+            if ($ventaExistente) {
+                return response()->json([
+                    'message' => 'Esta venta ya había sido registrada.',
+                    'venta_id' => $ventaExistente->id,
+                    'id' => $ventaExistente->id,
+                    'idempotent' => true,
+                    'data' => $ventaExistente,
+                ]);
+            }
 
             if (!Caja::where('estado', 'abierta')->exists()) {
                 throw ValidationException::withMessages(['caja' => 'Debes abrir caja antes de registrar una venta.']);
@@ -189,8 +207,6 @@ class VentaController extends Controller
             }
 
             // 3. Registrar la Venta
-            $userId = auth()->id() ?? $request->usuario_id ?? 1;
-
             // El identificador se deriva del ID persistido para evitar duplicados con ventas simultáneas.
             $venta = Venta::create([
                 'usuario_id'         => $userId,
@@ -199,6 +215,7 @@ class VentaController extends Controller
                 'total'              => $totalVenta,
                 'metodo_pago'        => $request->metodo_pago ?? 'Efectivo',
                 'estado'             => 'completada',
+                'idempotency_key'     => $request->idempotency_key,
             ]);
 
             $venta->update([
@@ -252,6 +269,7 @@ class VentaController extends Controller
                 'message'  => 'Venta registrada con éxito',
                 'venta_id' => $venta->id,
                 'id'       => $venta->id,
+                'idempotent' => false,
                 'data'     => $venta->load(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
             ], 201);
         });

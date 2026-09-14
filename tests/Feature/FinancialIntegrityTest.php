@@ -39,6 +39,7 @@ class FinancialIntegrityTest extends TestCase
 
         $primeraVenta = $this->actingAs($cajero, 'sanctum')
             ->postJson('/api/ventas', [
+                'idempotency_key' => '11111111-1111-4111-8111-111111111111',
                 'metodo_pago' => 'Efectivo',
                 'detalles' => [['producto_id' => $producto->id, 'cantidad' => 1]],
             ])
@@ -47,6 +48,7 @@ class FinancialIntegrityTest extends TestCase
 
         $segundaVenta = $this->actingAs($cajero, 'sanctum')
             ->postJson('/api/ventas', [
+                'idempotency_key' => '22222222-2222-4222-8222-222222222222',
                 'metodo_pago' => 'Efectivo',
                 'detalles' => [['producto_id' => $producto->id, 'cantidad' => 1]],
             ])
@@ -85,6 +87,7 @@ class FinancialIntegrityTest extends TestCase
 
         $ventaId = $this->actingAs($cajero, 'sanctum')
             ->postJson('/api/ventas', [
+                'idempotency_key' => '33333333-3333-4333-8333-333333333333',
                 'metodo_pago' => 'Efectivo',
                 'detalles' => [['producto_id' => $producto->id, 'cantidad' => 2]],
             ])
