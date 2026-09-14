@@ -1,9 +1,9 @@
 <?php
 
-use IlluminateDatabaseMigrationsMigration;
-use IlluminateDatabaseSchemaBlueprint;
-use IlluminateSupportFacadesDB;
-use IlluminateSupportFacadesSchema;
+use Illuminate\\DatabaseMigrationsMigration;
+use Illuminate\\DatabaseSchemaBlueprint;
+use Illuminate\\SupportFacadesDB;
+use Illuminate\\SupportFacadesSchema;
 
 return new class extends Migration {
     public function up(): void
