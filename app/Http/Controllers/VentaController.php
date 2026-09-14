@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Venta;
 use App\Models\Producto;
 use App\Models\Cliente;
+use App\Models\Caja;
+use App\Models\RecetaVenta;
 use App\Models\DetalleVenta;
 use App\Models\DetalleVentaLote;
 use App\Models\DevolucionVenta;
@@ -66,14 +68,28 @@ class VentaController extends Controller
     {
         $request->validate([
             'usuario_id'             => 'nullable|integer',
-            'cliente_id'             => 'nullable',
-            'metodo_pago'            => 'nullable|string',
+            'cliente_id'             => 'nullable|integer|exists:clientes,id',
+            'cliente_datos'           => 'nullable|array',
+            'metodo_pago'            => 'nullable|in:Efectivo,Yape,Plin,Tarjeta',
+            'receta'                  => 'nullable|array',
+            'receta.prescriptor_nombre' => 'nullable|string|max:255',
+            'receta.prescriptor_colegiatura' => 'nullable|string|max:50',
+            'receta.fecha_emision' => 'nullable|date|before_or_equal:today',
+            'receta.tipo' => 'nullable|in:fisica,electronica',
+            'receta.referencia' => 'nullable|string|max:100',
+            'receta.verificada' => 'nullable|boolean',
             'detalles'               => 'required|array|min:1',
             'detalles.*.producto_id' => 'required|exists:productos,id',
             'detalles.*.cantidad'    => 'required|integer|min:1',
         ]);
 
         return DB::transaction(function () use ($request) {
+            DB::table('operational_locks')->where('name', 'cash_register')->lockForUpdate()->firstOrFail();
+
+            if (!Caja::where('estado', 'abierta')->exists()) {
+                throw ValidationException::withMessages(['caja' => 'Debes abrir caja antes de registrar una venta.']);
+            }
+
             $totalVenta = 0;
             $detallesParaInsertar = [];
 
@@ -120,6 +136,7 @@ class VentaController extends Controller
                     'costo_unitario' => $producto->precio_compra,
                     'subtotal' => $subtotal,
                     'asignaciones' => $asignaciones,
+                    'condicion_venta' => $producto->condicion_venta ?? ($producto->requiere_receta ? 'con_receta' : 'libre'),
                 ];
             }
 
@@ -151,6 +168,26 @@ class VentaController extends Controller
                 $clienteId = $clienteGenerico->id;
             }
 
+            $requiereReceta = collect($detallesParaInsertar)->contains(fn ($detalle) => $detalle['condicion_venta'] !== 'libre');
+            $receta = $request->input('receta', []);
+
+            if ($requiereReceta) {
+                if ($clienteId === null || $clienteId === (Cliente::where('numero_documento', '00000000')->value('id'))) {
+                    throw ValidationException::withMessages(['cliente_id' => 'Los productos con receta requieren identificar al paciente.']);
+                }
+
+                $camposReceta = ['prescriptor_nombre', 'prescriptor_colegiatura', 'fecha_emision', 'tipo'];
+                foreach ($camposReceta as $campo) {
+                    if (empty($receta[$campo])) {
+                        throw ValidationException::withMessages(['receta.' . $campo => 'Completa los datos de la receta para dispensar este producto.']);
+                    }
+                }
+
+                if (empty($receta['verificada'])) {
+                    throw ValidationException::withMessages(['receta.verificada' => 'Debes confirmar que la receta fue verificada.']);
+                }
+            }
+
             // 3. Registrar la Venta
             $userId = auth()->id() ?? $request->usuario_id ?? 1;
 
@@ -170,7 +207,7 @@ class VentaController extends Controller
 
             foreach ($detallesParaInsertar as $detalle) {
                 $asignaciones = $detalle['asignaciones'];
-                unset($detalle['asignaciones']);
+                unset($detalle['asignaciones'], $detalle['condicion_venta']);
 
                 $detalleVenta = $venta->detalles()->create($detalle);
 
@@ -190,6 +227,23 @@ class VentaController extends Controller
                         'referencia' => 'Venta #' . $venta->id,
                     ]);
                 }
+            }
+
+            if ($requiereReceta) {
+                $cliente = Cliente::findOrFail($clienteId);
+                RecetaVenta::create([
+                    'venta_id' => $venta->id,
+                    'cliente_id' => $cliente->id,
+                    'verificada_por' => $userId,
+                    'paciente_nombre' => $cliente->nombre_razon_social ?? $cliente->nombre,
+                    'paciente_documento' => $cliente->numero_documento,
+                    'prescriptor_nombre' => $receta['prescriptor_nombre'],
+                    'prescriptor_colegiatura' => $receta['prescriptor_colegiatura'],
+                    'fecha_emision' => $receta['fecha_emision'],
+                    'tipo' => $receta['tipo'],
+                    'referencia' => $receta['referencia'] ?? null,
+                    'verificada_at' => now(),
+                ]);
             }
 
             ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar), 'lotes_asignados' => true]);
