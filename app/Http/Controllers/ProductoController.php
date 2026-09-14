@@ -36,14 +36,16 @@ class ProductoController extends Controller
             'imagen_url' => 'nullable|url|max:2048',
             'precio_compra' => 'nullable|numeric|min:0',
             'precio_venta' => 'required|numeric|min:0',
-            'stock_actual' => 'nullable|integer|min:0',
             'stock_minimo' => 'nullable|integer|min:0',
             'requiere_receta' => 'nullable|boolean',
+            'condicion_venta' => 'nullable|in:libre,con_receta,receta_retenida',
             'fecha_vencimiento' => 'nullable|date',
         ]);
 
         $validated['precio_compra'] = $validated['precio_compra'] ?? 0;
-        $validated['stock_actual'] = $validated['stock_actual'] ?? 0;
+        $validated['stock_actual'] = 0;
+        $validated['condicion_venta'] = $validated['condicion_venta'] ?? (($validated['requiere_receta'] ?? false) ? 'con_receta' : 'libre');
+        $validated['requiere_receta'] = $validated['condicion_venta'] !== 'libre';
         $validated['stock_minimo'] = $validated['stock_minimo'] ?? 5;
         $validated['requiere_receta'] = $validated['requiere_receta'] ?? false;
 
@@ -72,11 +74,13 @@ class ProductoController extends Controller
             'imagen_url' => 'nullable|url|max:2048',
             'precio_compra' => 'nullable|numeric|min:0',
             'precio_venta' => 'sometimes|numeric|min:0',
-            'stock_actual' => 'sometimes|integer|min:0',
             'stock_minimo' => 'sometimes|integer|min:0',
             'requiere_receta' => 'sometimes|boolean',
+            'condicion_venta' => 'sometimes|in:libre,con_receta,receta_retenida',
         ]);
 
+        if ($request->has('stock_actual') && (int) $request->input('stock_actual') !== (int) $producto->stock_actual) return response()->json(['message' => 'El stock solo puede cambiar mediante lotes, compras, ventas, devoluciones o bajas registradas.'], 422);
+        if (array_key_exists('condicion_venta', $validated)) $validated['requiere_receta'] = $validated['condicion_venta'] !== 'libre';
         $producto->update($validated);
 
         return response()->json([
