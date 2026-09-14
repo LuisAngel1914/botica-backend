@@ -25,7 +25,10 @@
                 <th>Fecha</th>
                 <th>Cliente</th>
                 <th>Método Pago</th>
-                <th class="text-right">Total</th>
+                <th>Estado</th>
+                <th class="text-right">Bruto</th>
+                <th class="text-right">Devuelto</th>
+                <th class="text-right">Neto</th>
             </tr>
         </thead>
         <tbody>
@@ -35,14 +38,20 @@
                 <td>{{ $v->created_at->format('d/m/Y H:i') }}</td>
                 <td>{{ $v->cliente->nombre_razon_social ?? $v->cliente->nombre ?? 'Cliente Eventual' }}</td>
                 <td>{{ $v->metodo_pago }}</td>
+                <td>{{ ucfirst($v->estado ?? 'completada') }}</td>
                 <td class="text-right">S/ {{ number_format($v->total, 2) }}</td>
+                <td class="text-right">S/ {{ number_format($v->devoluciones_total, 2) }}</td>
+                <td class="text-right">S/ {{ number_format($v->total_neto, 2) }}</td>
             </tr>
             @endforeach
         </tbody>
     </table>
 
     <div class="total-box">
-        Monto Total Recaudado: S/ {{ number_format($totalVentas, 2) }}
+        Ventas brutas: S/ {{ number_format($resumen['ventas_brutas'], 2) }}<br>
+        Devoluciones: S/ {{ number_format($resumen['devoluciones'], 2) }}<br>
+        Venta neta: S/ {{ number_format($resumen['ventas_netas'], 2) }}<br>
+        Ventas anuladas: {{ $resumen['ventas_anuladas'] }}
     </div>
 </body>
 </html>
