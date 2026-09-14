@@ -106,6 +106,10 @@ class FinancialIntegrityTest extends TestCase
             ->assertOk()
             ->assertJsonPath('estado_caja.ventas_efectivo', 10)
             ->assertJsonPath('estado_caja.devoluciones_efectivo', 10)
-            ->assertJsonPath('estado_caja.monto_esperado', 60);
+            ->assertJsonPath('estado_caja.monto_esperado', 60)
+            ->assertJsonPath('top_productos.0.unidades', 1)
+            ->assertJsonPath('top_productos.0.monto', 10)
+            ->assertJsonPath('productos_rentables.0.unidades', 1)
+            ->assertJsonPath('productos_rentables.0.margen_confirmado', 5);
     }
 }
