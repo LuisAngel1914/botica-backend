@@ -16,6 +16,12 @@ class FinancialIntegrityTest extends TestCase
     public function test_receipt_numbers_are_based_on_persisted_sale_ids(): void
     {
         $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+        Caja::create([
+            'usuario_id' => $cajero->id,
+            'monto_inicial' => 0,
+            'estado' => 'abierta',
+            'fecha_apertura' => now()->subMinute(),
+        ]);
         $producto = Producto::create([
             'codigo_barras' => 'FIN-REC-001',
             'nombre' => 'Producto para comprobantes',

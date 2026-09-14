@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Caja;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\User;
@@ -17,6 +18,12 @@ class PartialSaleReturnTest extends TestCase
     {
         $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
         $admin = User::factory()->create(['role' => 'admin', 'activo' => true]);
+        Caja::create([
+            'usuario_id' => $cajero->id,
+            'monto_inicial' => 0,
+            'estado' => 'abierta',
+            'fecha_apertura' => now()->subMinute(),
+        ]);
         $producto = Producto::create(['codigo_barras' => 'DEV-001', 'nombre' => 'Producto retornable', 'precio_compra' => 5, 'precio_venta' => 10, 'stock_actual' => 4, 'stock_minimo' => 1]);
         $primerLote = Lote::create(['producto_id' => $producto->id, 'numero_lote' => 'DEV-LOTE-1', 'stock' => 2, 'fecha_vencimiento' => now()->addDays(10)->toDateString()]);
         $segundoLote = Lote::create(['producto_id' => $producto->id, 'numero_lote' => 'DEV-LOTE-2', 'stock' => 2, 'fecha_vencimiento' => now()->addDays(20)->toDateString()]);

@@ -30,7 +30,7 @@ class ReporteController extends Controller
             'total_ventas_hoy' => (float) (clone $ventasHoy)->sum('total') - $this->totalDevoluciones($hoy),
             'transacciones_hoy' => (int) (clone $ventasHoy)->count(),
             'total_efectivo' => (float) $pagos->get('Efectivo', 0),
-            'total_digital' => (float) ($pagos->get('Yape', 0) + $pagos->get('Plin', 0) + $pagos->get('Tarjeta', 0)),
+            'total_digital' => (float) $pagos->filter(fn ($monto, $metodo) => $metodo !== 'Efectivo')->sum(),
             'devoluciones_hoy' => $this->totalDevoluciones($hoy),
             'top_productos' => $this->topProductosDelMes(),
             'desglose_pagos' => $pagos,
@@ -162,7 +162,7 @@ class ReporteController extends Controller
             ->groupBy('ventas.metodo_pago')
             ->pluck('monto', 'metodo_pago');
 
-        return $pagos->map(fn ($monto, $metodo) => (float) $monto - (float) $devoluciones->get($metodo, 0));
+        return $pagos->keys()->merge($devoluciones->keys())->unique()->mapWithKeys(fn ($metodo) => [$metodo => (float) $pagos->get($metodo, 0) - (float) $devoluciones->get($metodo, 0)]);
     }
 
     private function topProductosDelMes()

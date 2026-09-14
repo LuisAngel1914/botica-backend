@@ -69,71 +69,40 @@ class CajaController extends Controller
 
     public function abrir(Request $request)
     {
-        $cajaAbierta = Caja::where('estado', 'abierta')->first();
-        if ($cajaAbierta) {
-            return response()->json(['message' => 'Ya existe una caja abierta.'], 400);
-        }
-
         $request->validate(['monto_inicial' => 'required|numeric|min:0']);
-        $usuarioId = auth()->id() ?? User::value('id') ?? DB::table('users')->value('id');
 
-        if (!$usuarioId) {
-            return response()->json(['message' => 'Error: Debe existir al menos un usuario en el sistema para abrir caja.'], 400);
-        }
+        return DB::transaction(function () use ($request) {
+            DB::table('operational_locks')->where('name', 'cash_register')->lockForUpdate()->firstOrFail();
+            if (Caja::where('estado', 'abierta')->exists()) return response()->json(['message' => 'Ya existe una caja abierta.'], 400);
 
-        $caja = Caja::create([
-            'usuario_id' => $usuarioId,
-            'monto_inicial' => $request->monto_inicial,
-            'estado' => 'abierta',
-            'fecha_apertura' => Carbon::now(),
-        ]);
-
-        ActivityLogger::log($request, 'cash_register.opened', Caja::class, $caja->id, ['monto_inicial' => (float) $caja->monto_inicial]);
-
-        return response()->json(['message' => 'Caja abierta correctamente.', 'caja' => $caja], 201);
+            $caja = Caja::create(['usuario_id' => $request->user()->id, 'monto_inicial' => $request->monto_inicial, 'estado' => 'abierta', 'fecha_apertura' => Carbon::now()]);
+            ActivityLogger::log($request, 'cash_register.opened', Caja::class, $caja->id, ['monto_inicial' => (float) $caja->monto_inicial]);
+            return response()->json(['message' => 'Caja abierta correctamente.', 'caja' => $caja], 201);
+        });
     }
 
     public function cerrar(Request $request)
     {
-        $caja = Caja::where('estado', 'abierta')->latest()->first();
-        if (!$caja) {
-            return response()->json(['message' => 'No hay caja abierta para cerrar.'], 400);
-        }
-
         $request->validate(['monto_final' => 'required|numeric|min:0']);
-        $fechaInicio = $caja->fecha_apertura ?? $caja->created_at;
-        $ventasEfectivo = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
-        $ventasDigitales = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', '!=', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
-        $devolucionesEfectivo = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', 'Efectivo'))->sum('total');
-        $devolucionesDigitales = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', '!=', 'Efectivo'))->sum('total');
 
-        $ventasEfectivoNetas = (float) $ventasEfectivo - (float) $devolucionesEfectivo;
-        $ventasDigitalesNetas = (float) $ventasDigitales - (float) $devolucionesDigitales;
-        $montoEsperado = (float) $caja->monto_inicial + $ventasEfectivoNetas;
-        $diferencia = (float) $request->monto_final - $montoEsperado;
+        return DB::transaction(function () use ($request) {
+            DB::table('operational_locks')->where('name', 'cash_register')->lockForUpdate()->firstOrFail();
+            $caja = Caja::where('estado', 'abierta')->latest()->lockForUpdate()->first();
+            if (!$caja) return response()->json(['message' => 'No hay caja abierta para cerrar.'], 400);
 
-        $caja->update([
-            'monto_final' => $request->monto_final,
-            'total_ventas_efectivo' => $ventasEfectivoNetas,
-            'diferencia' => $diferencia,
-            'estado' => 'cerrada',
-            'fecha_cierre' => Carbon::now(),
-        ]);
-
-        ActivityLogger::log($request, 'cash_register.closed', Caja::class, $caja->id, ['monto_final' => (float) $request->monto_final, 'diferencia' => $diferencia]);
-
-        return response()->json([
-            'message' => 'Caja cerrada exitosamente.',
-            'resumen' => [
-                'monto_inicial' => (float) $caja->monto_inicial,
-                'ventas_efectivo' => $ventasEfectivoNetas,
-                'devoluciones_efectivo' => (float) $devolucionesEfectivo,
-                'ventas_digitales' => $ventasDigitalesNetas,
-                'devoluciones_digitales' => (float) $devolucionesDigitales,
-                'monto_esperado' => $montoEsperado,
-                'monto_real' => (float) $request->monto_final,
-                'diferencia' => $diferencia,
-            ],
-        ]);
+            $fechaInicio = $caja->fecha_apertura ?? $caja->created_at;
+            $ventasEfectivo = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
+            $ventasDigitales = Venta::where('created_at', '>=', $fechaInicio)->where('metodo_pago', '!=', 'Efectivo')->where(fn ($query) => $query->where('estado', 'completada')->orWhereNull('estado'))->sum('total');
+            $devolucionesEfectivo = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', 'Efectivo'))->sum('total');
+            $devolucionesDigitales = DevolucionVenta::where('created_at', '>=', $fechaInicio)->whereHas('venta', fn ($query) => $query->where('metodo_pago', '!=', 'Efectivo'))->sum('total');
+            $ventasEfectivoNetas = (float) $ventasEfectivo - (float) $devolucionesEfectivo;
+            $ventasDigitalesNetas = (float) $ventasDigitales - (float) $devolucionesDigitales;
+            $montoEsperado = (float) $caja->monto_inicial + $ventasEfectivoNetas;
+            $diferencia = (float) $request->monto_final - $montoEsperado;
+            $caja->update(['monto_final' => $request->monto_final, 'total_ventas_efectivo' => $ventasEfectivoNetas, 'diferencia' => $diferencia, 'estado' => 'cerrada', 'fecha_cierre' => Carbon::now()]);
+            ActivityLogger::log($request, 'cash_register.closed', Caja::class, $caja->id, ['monto_final' => (float) $request->monto_final, 'diferencia' => $diferencia]);
+            return response()->json(['message' => 'Caja cerrada exitosamente.', 'resumen' => ['monto_inicial' => (float) $caja->monto_inicial, 'ventas_efectivo' => $ventasEfectivoNetas, 'devoluciones_efectivo' => (float) $devolucionesEfectivo, 'ventas_digitales' => $ventasDigitalesNetas, 'devoluciones_digitales' => (float) $devolucionesDigitales, 'monto_esperado' => $montoEsperado, 'monto_real' => (float) $request->monto_final, 'diferencia' => $diferencia]]);
+        });
     }
+
 }
