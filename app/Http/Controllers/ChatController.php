@@ -115,7 +115,7 @@ class ChatController extends Controller
                 $catalogo = Producto::select('nombre', 'precio', 'precio_venta', 'stock', 'stock_actual')->take(20)->get()->toJson();
                 $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$apiKey}";
 
-                $response = Http::withoutVerifying()->timeout(8)->post($url, [
+                $response = Http::timeout(8)->post($url, [
                     'contents' => [
                         [
                             'parts' => [
