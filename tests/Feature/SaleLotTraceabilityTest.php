@@ -48,6 +48,7 @@ class SaleLotTraceabilityTest extends TestCase
         ]);
 
         $response = $this->actingAs($cajero, 'sanctum')->postJson('/api/ventas', [
+            'idempotency_key' => '55555555-5555-4555-8555-555555555555',
             'metodo_pago' => 'Efectivo',
             'detalles' => [[
                 'producto_id' => $producto->id,
@@ -131,6 +132,7 @@ class SaleLotTraceabilityTest extends TestCase
         ]);
 
         $this->actingAs($cajero, 'sanctum')->postJson('/api/ventas', [
+            'idempotency_key' => '66666666-6666-4666-8666-666666666666',
             'detalles' => [['producto_id' => $producto->id, 'cantidad' => 1]],
         ])->assertUnprocessable();
 
