@@ -72,7 +72,7 @@ class SaleLotTraceabilityTest extends TestCase
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/ventas')
             ->assertOk()
-            ->assertJsonPath('0.detalles.0.asignaciones.0.lote.numero_lote', $loteProximo->numero_lote);
+            ->assertJsonPath('data.0.detalles.0.asignaciones.0.lote.numero_lote', $loteProximo->numero_lote);
 
         $this->actingAs($admin, 'sanctum')
             ->get('/api/ventas/' . $venta->id . '/ticket')

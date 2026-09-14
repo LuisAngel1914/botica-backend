@@ -18,19 +18,48 @@ use App\Services\ActivityLogger;
 
 class VentaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        try {
-            $ventas = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote', 'detalles.devoluciones.asignaciones', 'devoluciones.detalles'])
-                ->orderBy('id', 'desc')
-                ->get();
+        $data = $request->validate([
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:5|max:100',
+            'fecha_inicio' => 'nullable|date',
+            'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
+            'search' => 'nullable|string|max:100',
+        ]);
 
-            return response()->json($ventas, 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error al obtener ventas: ' . $e->getMessage()
-            ], 500);
+        $query = Venta::with([
+            'cliente',
+            'detalles.producto',
+            'detalles.asignaciones.lote',
+            'detalles.devoluciones.asignaciones',
+            'devoluciones.detalles',
+        ])->orderByDesc('id');
+
+        if (!empty($data['fecha_inicio'])) {
+            $query->whereDate('created_at', '>=', $data['fecha_inicio']);
         }
+
+        if (!empty($data['fecha_fin'])) {
+            $query->whereDate('created_at', '<=', $data['fecha_fin']);
+        }
+
+        if (!empty($data['search'])) {
+            $search = trim($data['search']);
+            $query->where(function ($ventas) use ($search) {
+                $ventas->where('id', 'like', '%' . $search . '%')
+                    ->orWhere('numero_comprobante', 'like', '%' . $search . '%')
+                    ->orWhereHas('cliente', function ($clientes) use ($search) {
+                        $clientes->where('nombre_razon_social', 'like', '%' . $search . '%')
+                            ->orWhere('nombre', 'like', '%' . $search . '%')
+                            ->orWhere('numero_documento', 'like', '%' . $search . '%');
+                    });
+            });
+        }
+
+        return response()->json(
+            $query->paginate($data['per_page'] ?? 15)->withQueryString()
+        );
     }
 
     public function store(Request $request) 
