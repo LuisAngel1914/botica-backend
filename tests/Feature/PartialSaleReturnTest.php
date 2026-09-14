@@ -28,7 +28,7 @@ class PartialSaleReturnTest extends TestCase
         $primerLote = Lote::create(['producto_id' => $producto->id, 'numero_lote' => 'DEV-LOTE-1', 'stock' => 2, 'fecha_vencimiento' => now()->addDays(10)->toDateString()]);
         $segundoLote = Lote::create(['producto_id' => $producto->id, 'numero_lote' => 'DEV-LOTE-2', 'stock' => 2, 'fecha_vencimiento' => now()->addDays(20)->toDateString()]);
 
-        $ventaId = $this->actingAs($cajero, 'sanctum')->postJson('/api/ventas', ['metodo_pago' => 'Efectivo', 'detalles' => [['producto_id' => $producto->id, 'cantidad' => 3]]])->assertCreated()->json('venta_id');
+        $ventaId = $this->actingAs($cajero, 'sanctum')->postJson('/api/ventas', ['idempotency_key' => '44444444-4444-4444-8444-444444444444', 'metodo_pago' => 'Efectivo', 'detalles' => [['producto_id' => $producto->id, 'cantidad' => 3]]])->assertCreated()->json('venta_id');
         $detalle = Venta::findOrFail($ventaId)->detalles()->firstOrFail();
 
         $this->actingAs($admin, 'sanctum')->postJson('/api/ventas/' . $ventaId . '/devoluciones', [
