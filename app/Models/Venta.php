@@ -15,6 +15,7 @@ class Venta extends Model
         'total',
         'metodo_pago',
         'estado',
+        'idempotency_key',
     ];
 
     // Relación con el cliente asignado a la venta
