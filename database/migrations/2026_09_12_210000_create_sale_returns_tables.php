@@ -40,7 +40,10 @@ return new class extends Migration {
                 $table->foreignId('lote_id')->constrained('lotes');
                 $table->unsignedInteger('cantidad');
                 $table->timestamps();
-                $table->unique(['detalle_devolucion_venta_id', 'detalle_venta_lote_id']);
+                $table->unique(
+                    ['detalle_devolucion_venta_id', 'detalle_venta_lote_id'],
+                    'dv_lote_detalle_unique'
+                );
             });
         }
     }
