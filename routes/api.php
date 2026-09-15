@@ -32,7 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/caja/abrir', [CajaController::class, 'abrir']);
     Route::post('/caja/cerrar', [CajaController::class, 'cerrar']);
     Route::post('/chat', [ChatController::class, 'responder'])->middleware('throttle:20,1');
-    Route::post('/chat-auth', [ChatController::class, 'responder']);
+    Route::post('/chat-auth', [ChatController::class, 'responder'])->middleware('throttle:20,1');
 
     Route::middleware('role:admin')->group(function () {
         Route::apiResource('clientes', ClienteController::class)->except(['show', 'destroy']);
