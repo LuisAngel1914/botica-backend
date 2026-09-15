@@ -113,15 +113,28 @@ class ProductoController extends Controller
     public function alertas()
     {
         $stockBajo = Producto::whereRaw('stock_actual <= COALESCE(stock_minimo, 5)')->get();
+        $hoy = now()->toDateString();
+        $limite = now()->addDays(30)->toDateString();
 
-        $proximosAVencer = Producto::whereNotNull('fecha_vencimiento')
-            ->whereDate('fecha_vencimiento', '>=', now())
-            ->whereDate('fecha_vencimiento', '<=', now()->addDays(30))
-            ->get();
+        $proximosAVencer = Producto::whereHas('lotes', function ($query) use ($hoy, $limite) {
+            $query->where('stock', '>', 0)
+                ->whereDate('fecha_vencimiento', '>=', $hoy)
+                ->whereDate('fecha_vencimiento', '<=', $limite);
+        })->with(['lotes' => function ($query) use ($hoy, $limite) {
+            $query->where('stock', '>', 0)
+                ->whereDate('fecha_vencimiento', '>=', $hoy)
+                ->whereDate('fecha_vencimiento', '<=', $limite)
+                ->orderBy('fecha_vencimiento');
+        }])->get();
 
-        $vencidos = Producto::whereNotNull('fecha_vencimiento')
-            ->whereDate('fecha_vencimiento', '<', now())
-            ->get();
+        $vencidos = Producto::whereHas('lotes', function ($query) use ($hoy) {
+            $query->where('stock', '>', 0)
+                ->whereDate('fecha_vencimiento', '<', $hoy);
+        })->with(['lotes' => function ($query) use ($hoy) {
+            $query->where('stock', '>', 0)
+                ->whereDate('fecha_vencimiento', '<', $hoy)
+                ->orderBy('fecha_vencimiento');
+        }])->get();
 
         return response()->json([
             'stock_bajo' => $stockBajo,
