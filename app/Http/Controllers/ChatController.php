@@ -385,7 +385,13 @@ class ChatController extends Controller
 
     private function isCashRequest(string $mensaje): bool
     {
-        return str_contains($mensaje, 'caja') || str_contains($mensaje, 'efectivo') || str_contains($mensaje, 'monto esperado');
+        return str_contains($mensaje, 'caja')
+            || str_contains($mensaje, 'efectivo')
+            || str_contains($mensaje, 'monto esperado')
+            || str_contains($mensaje, 'registradora')
+            || str_contains($mensaje, 'dinero')
+            || str_contains($mensaje, 'como vamos')
+            || str_contains($mensaje, 'cómo vamos');
     }
 
     private function isSaleRequest(string $mensaje): bool
