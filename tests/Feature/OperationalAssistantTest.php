@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Caja;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\User;
@@ -60,7 +61,71 @@ class OperationalAssistantTest extends TestCase
             ->assertJsonCount(1, 'productos');
     }
 
-    public function test_assistant_refuses_medical_advice_without_calling_the_catalog(): void
+    public function test_assistant_returns_current_cash_status_to_authenticated_staff(): void
+    {
+        $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+
+        $caja = Caja::create([
+            'usuario_id' => $cajero->id,
+            'monto_inicial' => 100,
+            'estado' => 'abierta',
+            'fecha_apertura' => now(),
+        ]);
+
+        $this->actingAs($cajero, 'sanctum')
+            ->postJson('/api/chat', ['mensaje' => '¿Cuál es el estado de caja?'])
+            ->assertOk()
+            ->assertJsonPath('code', 'CASH_STATUS')
+            ->assertJsonPath('data.estado', 'abierta')
+            ->assertJsonPath('data.caja_id', $caja->id)
+            ->assertJsonPath('data.monto_inicial', 100);
+    }
+
+    public function test_assistant_does_not_expose_admin_reports_to_cashiers(): void
+    {
+        $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+
+        $this->actingAs($cajero, 'sanctum')
+            ->postJson('/api/chat', ['mensaje' => 'Muéstrame el reporte de hoy'])
+            ->assertOk()
+            ->assertJsonPath('code', 'FORBIDDEN_MODULE');
+    }
+
+    public function test_administrator_can_query_inventory_alerts(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'activo' => true]);
+
+        $producto = Producto::create([
+            'codigo_barras' => 'ASIS-003',
+            'nombre' => 'Producto crítico',
+            'precio_compra' => 5,
+            'precio_venta' => 10,
+            'stock_actual' => 1,
+            'stock_minimo' => 2,
+        ]);
+        Lote::create([
+            'producto_id' => $producto->id,
+            'numero_lote' => 'ASIS-POR-VENCER',
+            'stock' => 1,
+            'fecha_vencimiento' => now()->addDays(10)->toDateString(),
+        ]);
+        Lote::create([
+            'producto_id' => $producto->id,
+            'numero_lote' => 'ASIS-VENCIDO-ALERTA',
+            'stock' => 1,
+            'fecha_vencimiento' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/chat', ['mensaje' => '¿Qué lotes vencidos y stock crítico tenemos?'])
+            ->assertOk()
+            ->assertJsonPath('code', 'INVENTORY_ALERTS')
+            ->assertJsonPath('data.stock_critico', 1)
+            ->assertJsonPath('data.lotes_por_vencer', 1)
+            ->assertJsonPath('data.lotes_vencidos', 1);
+    }
+
+    public function test_assistant_refuses_medical_advice(): void
     {
         $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
 
@@ -71,7 +136,7 @@ class OperationalAssistantTest extends TestCase
             ->assertJsonPath('productos', []);
     }
 
-    public function test_assistant_rejects_questions_outside_of_the_pharmacy_catalog(): void
+    public function test_assistant_rejects_questions_outside_the_botica_system(): void
     {
         $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
 
