@@ -342,7 +342,10 @@ class ChatController extends Controller
             || str_contains($mensaje, 'stock')
             || str_contains($mensaje, 'disponible')
             || str_contains($mensaje, 'precio')
-            || str_contains($mensaje, 'principio activo');
+            || str_contains($mensaje, 'principio activo')
+            || str_contains($mensaje, 'tienen')
+            || str_contains($mensaje, 'tiene')
+            || str_contains($mensaje, 'busco');
     }
 
     private function extractKeywords(string $mensaje): array
