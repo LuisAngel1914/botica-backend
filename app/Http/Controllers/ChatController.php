@@ -2,18 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AssistantInteraction;
 use App\Models\Caja;
 use App\Models\Cliente;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\User;
 use App\Models\Venta;
+use App\Services\OperationalIntentClassifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
 class ChatController extends Controller
 {
+    private ?User $currentUser = null;
+    private ?string $interactionIntent = null;
+    private string $interactionSource = 'rules';
+
+    public function __construct(private readonly OperationalIntentClassifier $intentClassifier)
+    {
+    }
+
     private const MEDICAL_TERMS = [
         'dosis', 'dosificacion', 'dosificación', 'tomar', 'tratamiento', 'diagnostico',
         'diagnóstico', 'sintoma', 'síntoma', 'embarazo', 'interaccion', 'interacción',
@@ -43,6 +53,7 @@ class ChatController extends Controller
         $mensaje = trim($data['mensaje']);
         $mensajeNormalizado = $this->normalizar($mensaje);
         $usuario = $request->user();
+        $this->currentUser = $usuario;
 
         if ($this->containsMedicalAdviceRequest($mensajeNormalizado)) {
             return $this->response('MEDICAL_ADVICE_UNAVAILABLE', 'Por seguridad, este asistente no brinda dosis, diagnósticos ni recomendaciones terapéuticas. Consulta al químico farmacéutico o a un profesional de salud. Sí puedo ayudarte con la operación de Botica L y L.');
@@ -50,6 +61,14 @@ class ChatController extends Controller
 
         if ($this->containsActionRequest($mensajeNormalizado)) {
             return $this->response('ACTION_REQUIRES_MODULE', 'Para proteger la trazabilidad, no ejecuto anulaciones, correcciones, cierres ni cambios desde el chat. Realiza la operación desde el módulo correspondiente, donde el sistema solicitará las validaciones y el motivo.');
+        }
+
+        $intent = $this->intentClassifier->classify($mensaje);
+        if ($intent !== null) {
+            $this->interactionIntent = $intent;
+            $this->interactionSource = 'ai';
+
+            return $this->answerIntent($intent, $mensaje, $mensajeNormalizado, $usuario);
         }
 
         if ($this->isUserRequest($mensajeNormalizado)) {
@@ -81,6 +100,41 @@ class ChatController extends Controller
         }
 
         return $this->response('OUT_OF_SCOPE', 'Solo puedo ayudarte con la operación de Botica L y L: productos, inventario, lotes, caja, ventas, clientes, reportes y usuarios autorizados.');
+    }
+
+    public function feedback(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'interaction_id' => 'required|integer',
+            'helpful' => 'required|boolean',
+        ]);
+
+        $interaction = AssistantInteraction::query()
+            ->whereKey($data['interaction_id'])
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$interaction) {
+            return response()->json(['message' => 'Interacción no encontrada.'], 404);
+        }
+
+        $interaction->update(['helpful' => $data['helpful'], 'feedback_at' => now()]);
+
+        return response()->json(['message' => 'Gracias por tu comentario.']);
+    }
+
+    private function answerIntent(string $intent, string $mensaje, string $mensajeNormalizado, User $usuario): JsonResponse
+    {
+        return match ($intent) {
+            'cash_status' => $this->answerCashStatus(),
+            'sales_today' => $this->answerSales($usuario),
+            'report_summary' => $this->answerReports($usuario),
+            'inventory_alerts' => $this->answerInventoryAlerts($usuario),
+            'client_lookup' => $this->answerClient($mensaje, $usuario),
+            'users_summary' => $this->answerUsers($usuario),
+            'catalog' => $this->answerCatalog($mensajeNormalizado),
+            default => $this->response('OUT_OF_SCOPE', 'Solo puedo ayudarte con la operación de Botica L y L: productos, inventario, lotes, caja, ventas, clientes, reportes y usuarios autorizados.'),
+        };
     }
 
     private function answerCashStatus(): JsonResponse
@@ -268,11 +322,27 @@ class ChatController extends Controller
 
     private function response(string $code, string $respuesta, array $data = [], Collection|array $productos = []): JsonResponse
     {
+        $interactionId = null;
+
+        if ($this->currentUser) {
+            try {
+                $interactionId = AssistantInteraction::create([
+                    'user_id' => $this->currentUser->id,
+                    'intent' => $this->interactionIntent,
+                    'source' => $this->interactionSource,
+                    'response_code' => $code,
+                ])->id;
+            } catch (\Throwable) {
+                // El asistente sigue disponible incluso si falla su telemetría.
+            }
+        }
+
         return response()->json([
             'code' => $code,
             'respuesta' => $respuesta,
             'data' => $data,
             'productos' => $productos,
+            'assistant_interaction_id' => $interactionId,
         ]);
     }
 

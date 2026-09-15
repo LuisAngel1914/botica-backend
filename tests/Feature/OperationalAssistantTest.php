@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\AssistantInteraction;
 use App\Models\Caja;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class OperationalAssistantTest extends TestCase
@@ -123,6 +125,45 @@ class OperationalAssistantTest extends TestCase
             ->assertJsonPath('data.stock_critico', 1)
             ->assertJsonPath('data.lotes_por_vencer', 1)
             ->assertJsonPath('data.lotes_vencidos', 1);
+    }
+
+    public function test_ai_classifier_interprets_a_natural_internal_question_without_receiving_data(): void
+    {
+        config(['services.gemini.key' => 'test-key', 'services.gemini.model' => 'gemini-2.0-flash']);
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => '{"intent":"cash_status"}']]]]],
+            ]),
+        ]);
+        $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+
+        $this->actingAs($cajero, 'sanctum')
+            ->postJson('/api/chat', ['mensaje' => '¿Cómo vamos con el dinero en la registradora?'])
+            ->assertOk()
+            ->assertJsonPath('code', 'CASH_STATUS');
+
+        $this->assertDatabaseHas('assistant_interactions', [
+            'user_id' => $cajero->id,
+            'intent' => 'cash_status',
+            'source' => 'ai',
+            'response_code' => 'CASH_STATUS',
+        ]);
+    }
+
+    public function test_user_can_rate_own_assistant_interaction(): void
+    {
+        $cajero = User::factory()->create(['role' => 'cajero', 'activo' => true]);
+        $interaction = AssistantInteraction::create([
+            'user_id' => $cajero->id,
+            'source' => 'rules',
+            'response_code' => 'CASH_STATUS',
+        ]);
+
+        $this->actingAs($cajero, 'sanctum')
+            ->postJson('/api/chat/feedback', ['interaction_id' => $interaction->id, 'helpful' => true])
+            ->assertOk();
+
+        $this->assertDatabaseHas('assistant_interactions', ['id' => $interaction->id, 'helpful' => true]);
     }
 
     public function test_assistant_refuses_medical_advice(): void
