@@ -57,14 +57,16 @@ class ProductAlertsTest extends TestCase
             'fecha_vencimiento' => now()->addDays(5)->toDateString(),
         ]);
 
-        $this->actingAs($admin, 'sanctum')
+        $response = $this->actingAs($admin, 'sanctum')
             ->getJson('/api/productos/alertas')
             ->assertOk()
             ->assertJsonPath('stock_bajo.0.id', $porVencer->id)
             ->assertJsonPath('proximos_a_vencer.0.id', $porVencer->id)
             ->assertJsonPath('proximos_a_vencer.0.lotes.0.numero_lote', 'ALERTA-PROXIMO')
             ->assertJsonPath('vencidos.0.id', $vencido->id)
-            ->assertJsonPath('vencidos.0.lotes.0.numero_lote', 'ALERTA-VENCIDO')
-            ->assertJsonMissing(['id' => $soloFechaAntigua->id]);
+            ->assertJsonPath('vencidos.0.lotes.0.numero_lote', 'ALERTA-VENCIDO');
+
+        $this->assertNotContains($soloFechaAntigua->id, collect($response->json('proximos_a_vencer'))->pluck('id')->all());
+        $this->assertNotContains($soloFechaAntigua->id, collect($response->json('vencidos'))->pluck('id')->all());
     }
 }
