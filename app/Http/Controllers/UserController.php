@@ -9,6 +9,7 @@ use App\Models\Venta;
 use App\Services\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
@@ -89,6 +90,36 @@ class UserController extends Controller
         return response()->json([
             'message' => $usuario->activo ? 'Usuario activado correctamente.' : 'Usuario desactivado correctamente.',
             'usuario' => $usuario,
+        ]);
+    }
+
+    public function resetPassword(Request $request, $id)
+    {
+        $usuario = User::findOrFail($id);
+
+        if ($usuario->id === $request->user()->id) {
+            return response()->json([
+                'message' => 'No puedes restablecer tu propia contraseña desde la administración de usuarios.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        DB::transaction(function () use ($request, $usuario, $data) {
+            $sesionesRevocadas = $usuario->tokens()->count();
+            $usuario->update(['password' => Hash::make($data['password'])]);
+            $usuario->tokens()->delete();
+
+            ActivityLogger::log($request, 'user.password_reset', User::class, $usuario->id, [
+                'role' => $usuario->role,
+                'sessions_revoked' => $sesionesRevocadas,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Contraseña restablecida. Las sesiones anteriores del usuario fueron cerradas.',
         ]);
     }
 }
