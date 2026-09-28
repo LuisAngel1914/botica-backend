@@ -68,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/usuarios/resumen-operativo', [UserController::class, 'resumenOperativo']);
         Route::post('/usuarios', [UserController::class, 'store']);
         Route::patch('/usuarios/{id}/toggle', [UserController::class, 'toggleEstado']);
+        Route::patch('/usuarios/{id}/password', [UserController::class, 'resetPassword']);
 
         Route::get('/reportes/resumen', [ReporteController::class, 'resumen']);
         Route::get('/reportes/dashboard', [ReporteController::class, 'dashboard']);
