@@ -12,6 +12,7 @@ use App\Models\DetalleVentaLote;
 use App\Models\DevolucionVenta;
 use App\Models\InventoryMovement;
 use App\Models\Lote;
+use App\Models\Configuracion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -219,7 +220,7 @@ class VentaController extends Controller
             ]);
 
             $venta->update([
-                'numero_comprobante' => 'B001-' . str_pad($venta->id, 6, '0', STR_PAD_LEFT),
+                'numero_comprobante' => Configuracion::actual()->serie_comprobante . '-' . str_pad($venta->id, 6, '0', STR_PAD_LEFT),
             ]);
 
             foreach ($detallesParaInsertar as $detalle) {
@@ -421,6 +422,8 @@ class VentaController extends Controller
             return response()->json(['message' => 'No tienes permiso para consultar este ticket.'], 403);
         }
 
-        return view('tickets.venta', compact('venta'));
+        $configuracion = Configuracion::actual();
+
+        return view('tickets.venta', compact('venta', 'configuracion'));
     }
 }

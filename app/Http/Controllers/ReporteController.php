@@ -8,6 +8,7 @@ use App\Models\DevolucionVenta;
 use App\Models\Lote;
 use App\Models\Producto;
 use App\Models\Venta;
+use App\Models\Configuracion;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -41,6 +42,7 @@ class ReporteController extends Controller
     {
         $hoy = Carbon::today();
         $inicioMes = Carbon::now()->startOfMonth();
+        $diasAlerta = Configuracion::actual()->dias_alerta_vencimiento;
 
         $ventasHoy = Venta::query()
             ->whereDate('created_at', $hoy)
@@ -60,7 +62,7 @@ class ReporteController extends Controller
             ->with('producto:id,nombre,imagen_url')
             ->where('stock', '>', 0)
             ->whereDate('fecha_vencimiento', '>=', $hoy)
-            ->whereDate('fecha_vencimiento', '<=', Carbon::now()->addDays(60))
+            ->whereDate('fecha_vencimiento', '<=', Carbon::now()->addDays($diasAlerta))
             ->orderBy('fecha_vencimiento')
             ->limit(5)
             ->get(['id', 'producto_id', 'numero_lote', 'stock', 'fecha_vencimiento']);
@@ -120,7 +122,7 @@ class ReporteController extends Controller
             ],
             'alertas_inventario' => [
                 'total_stock_critico' => Producto::whereColumn('stock_actual', '<=', 'stock_minimo')->count(),
-                'total_por_vencer' => Lote::where('stock', '>', 0)->whereDate('fecha_vencimiento', '>=', $hoy)->whereDate('fecha_vencimiento', '<=', Carbon::now()->addDays(60))->count(),
+                'total_por_vencer' => Lote::where('stock', '>', 0)->whereDate('fecha_vencimiento', '>=', $hoy)->whereDate('fecha_vencimiento', '<=', Carbon::now()->addDays($diasAlerta))->count(),
                 'total_vencidos' => Lote::where('stock', '>', 0)->whereDate('fecha_vencimiento', '<', $hoy)->count(),
             ],
             'estado_caja' => $estadoCaja,
@@ -315,8 +317,9 @@ class ReporteController extends Controller
     {
         $ventas = $this->filtrarVentas($request);
         $resumen = $this->resumenComercial($ventas);
+        $configuracion = Configuracion::actual();
 
-        return Pdf::loadView('pdf.reporte_ventas', compact('ventas', 'resumen'))
+        return Pdf::loadView('pdf.reporte_ventas', compact('ventas', 'resumen', 'configuracion'))
             ->download('reporte_ventas_' . Carbon::now()->format('Ymd_His') . '.pdf');
     }
 
@@ -326,10 +329,13 @@ class ReporteController extends Controller
         $resumen = $this->resumenComercial($ventas);
         $filename = 'reporte_ventas_' . Carbon::now()->format('Ymd_His') . '.csv';
 
-        return response()->stream(function () use ($ventas, $resumen) {
+        $configuracion = Configuracion::actual();
+
+        return response()->stream(function () use ($ventas, $resumen, $configuracion) {
             $file = fopen('php://output', 'w');
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
-            fputcsv($file, ['ID Venta', 'Fecha', 'Cliente', 'Método Pago', 'Estado', 'Venta bruta (S/)', 'Devuelto (S/)', 'Venta neta (S/)']);
+            $simbolo = $configuracion->simbolo_moneda;
+            fputcsv($file, ['ID Venta', 'Fecha', 'Cliente', 'Método Pago', 'Estado', "Venta bruta ({$simbolo})", "Devuelto ({$simbolo})", "Venta neta ({$simbolo})"]);
 
             foreach ($ventas as $venta) {
                 fputcsv($file, [
@@ -360,11 +366,12 @@ class ReporteController extends Controller
 
         $ventas = $this->filtrarVentas($request);
         $resumen = $this->resumenComercial($ventas);
-        $pdf = Pdf::loadView('pdf.reporte_ventas', compact('ventas', 'resumen'));
+        $configuracion = Configuracion::actual();
+        $pdf = Pdf::loadView('pdf.reporte_ventas', compact('ventas', 'resumen', 'configuracion'));
 
-        Mail::send([], [], function ($message) use ($request, $pdf) {
+        Mail::send([], [], function ($message) use ($request, $pdf, $configuracion) {
             $message->to($request->email)
-                ->subject('Reporte de Ventas - Botica')
+                ->subject('Reporte de Ventas - ' . $configuracion->nombre_comercial)
                 ->html('Adjunto encontrarás el reporte de ventas generado en PDF.')
                 ->attachData($pdf->output(), 'Reporte_Ventas.pdf', ['mime' => 'application/pdf']);
         });

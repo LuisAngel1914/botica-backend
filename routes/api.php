@@ -9,6 +9,7 @@ use App\Http\Controllers\DevolucionVentaController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\ProductoController;
@@ -18,10 +19,12 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VentaController;
 
 Route::get('/health', HealthController::class);
+Route::get('/configuracion/publica', [ConfiguracionController::class, 'publica']);
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::patch('/perfil/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
 
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/buscar/{codigo}', [ProductoController::class, 'buscarPorCodigo']);
@@ -36,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chat/feedback', [ChatController::class, 'feedback'])->middleware('throttle:20,1');
 
     Route::middleware('role:admin')->group(function () {
+        Route::get('/configuracion', [ConfiguracionController::class, 'show']);
+        Route::put('/configuracion', [ConfiguracionController::class, 'update']);
         Route::apiResource('clientes', ClienteController::class)->except(['show', 'destroy']);
         Route::get('/clientes/{cliente}/resumen', [ClienteController::class, 'resumen']);
         Route::get('/ventas', [VentaController::class, 'index']);

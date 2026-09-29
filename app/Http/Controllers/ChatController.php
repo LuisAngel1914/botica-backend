@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AssistantInteraction;
 use App\Models\Caja;
+use App\Models\Configuracion;
 use App\Models\Cliente;
 use App\Models\Lote;
 use App\Models\Producto;
@@ -19,6 +20,7 @@ class ChatController extends Controller
     private ?User $currentUser = null;
     private ?string $interactionIntent = null;
     private string $interactionSource = 'rules';
+    private ?Configuracion $businessSettings = null;
 
     public function __construct(private readonly OperationalIntentClassifier $intentClassifier)
     {
@@ -56,7 +58,7 @@ class ChatController extends Controller
         $this->currentUser = $usuario;
 
         if ($this->containsMedicalAdviceRequest($mensajeNormalizado)) {
-            return $this->response('MEDICAL_ADVICE_UNAVAILABLE', 'Por seguridad, este asistente no brinda dosis, diagnósticos ni recomendaciones terapéuticas. Consulta al químico farmacéutico o a un profesional de salud. Sí puedo ayudarte con la operación de Botica L y L.');
+            return $this->response('MEDICAL_ADVICE_UNAVAILABLE', 'Por seguridad, este asistente no brinda dosis, diagnósticos ni recomendaciones terapéuticas. Consulta al químico farmacéutico o a un profesional de salud. Sí puedo ayudarte con la operación de ' . $this->business()->nombre_comercial . '.');
         }
 
         if ($this->containsActionRequest($mensajeNormalizado)) {
@@ -99,7 +101,7 @@ class ChatController extends Controller
             return $this->answerCatalog($mensajeNormalizado);
         }
 
-        return $this->response('OUT_OF_SCOPE', 'Solo puedo ayudarte con la operación de Botica L y L: productos, inventario, lotes, caja, ventas, clientes, reportes y usuarios autorizados.');
+        return $this->outOfScope();
     }
 
     public function feedback(Request $request): JsonResponse
@@ -133,7 +135,7 @@ class ChatController extends Controller
             'client_lookup' => $this->answerClient($mensaje, $usuario),
             'users_summary' => $this->answerUsers($usuario),
             'catalog' => $this->answerCatalog($mensajeNormalizado),
-            default => $this->response('OUT_OF_SCOPE', 'Solo puedo ayudarte con la operación de Botica L y L: productos, inventario, lotes, caja, ventas, clientes, reportes y usuarios autorizados.'),
+            default => $this->outOfScope(),
         };
     }
 
@@ -156,7 +158,7 @@ class ChatController extends Controller
 
         return $this->response(
             'CASH_STATUS',
-            'La caja está abierta a cargo de ' . ($caja->usuario?->name ?? 'un operador') . '. Monto inicial: S/ ' . number_format((float) $caja->monto_inicial, 2) . '. Efectivo registrado: S/ ' . number_format($ventasEfectivo, 2) . '. Monto esperado: S/ ' . number_format($esperado, 2) . '.',
+            'La caja está abierta a cargo de ' . ($caja->usuario?->name ?? 'un operador') . '. Monto inicial: ' . $this->money($caja->monto_inicial) . '. Efectivo registrado: ' . $this->money($ventasEfectivo) . '. Monto esperado: ' . $this->money($esperado) . '.',
             [
                 'estado' => 'abierta',
                 'caja_id' => $caja->id,
@@ -180,7 +182,7 @@ class ChatController extends Controller
 
         return $this->response(
             'SALES_TODAY',
-            "Hoy hay {$cantidad} ventas completadas {$alcance}, por S/ " . number_format($total, 2) . '.',
+            "Hoy hay {$cantidad} ventas completadas {$alcance}, por " . $this->money($total) . '.',
             ['fecha' => today()->toDateString(), 'cantidad_ventas' => $cantidad, 'total_ventas' => $total, 'alcance' => $this->isAdmin($usuario) ? 'global' : 'propio']
         );
     }
@@ -198,7 +200,7 @@ class ChatController extends Controller
 
         return $this->response(
             'REPORT_SUMMARY',
-            'Resumen de hoy: ' . $cantidad . ' ventas completadas por S/ ' . number_format($total, 2) . ' y ' . $productosCriticos . ' productos con stock crítico.',
+            'Resumen de hoy: ' . $cantidad . ' ventas completadas por ' . $this->money($total) . ' y ' . $productosCriticos . ' productos con stock crítico.',
             ['fecha' => today()->toDateString(), 'ventas_completadas' => $cantidad, 'total_ventas' => $total, 'productos_stock_critico' => $productosCriticos]
         );
     }
@@ -210,17 +212,18 @@ class ChatController extends Controller
         }
 
         $hoy = today();
+        $diasAlerta = $this->business()->dias_alerta_vencimiento;
         $criticos = (int) Producto::query()->whereColumn('stock_actual', '<=', 'stock_minimo')->count();
         $porVencer = (int) Lote::query()
             ->where('stock', '>', 0)
             ->whereDate('fecha_vencimiento', '>=', $hoy)
-            ->whereDate('fecha_vencimiento', '<=', now()->addDays(60))
+            ->whereDate('fecha_vencimiento', '<=', now()->addDays($diasAlerta))
             ->count();
         $vencidos = (int) Lote::query()->where('stock', '>', 0)->whereDate('fecha_vencimiento', '<', $hoy)->count();
 
         return $this->response(
             'INVENTORY_ALERTS',
-            "Inventario: {$criticos} productos con stock crítico, {$porVencer} lotes por vencer en 60 días y {$vencidos} lotes vencidos con stock.",
+            "Inventario: {$criticos} productos con stock crítico, {$porVencer} lotes por vencer en {$diasAlerta} días y {$vencidos} lotes vencidos con stock.",
             ['stock_critico' => $criticos, 'lotes_por_vencer' => $porVencer, 'lotes_vencidos' => $vencidos]
         );
     }
@@ -349,6 +352,21 @@ class ChatController extends Controller
     private function forbidden(string $modulo): JsonResponse
     {
         return $this->response('FORBIDDEN_MODULE', "No tienes permiso para consultar {$modulo} desde el asistente. Solicita acceso a un administrador si lo necesitas.");
+    }
+
+    private function outOfScope(): JsonResponse
+    {
+        return $this->response('OUT_OF_SCOPE', 'Solo puedo ayudarte con la operación de ' . $this->business()->nombre_comercial . ': productos, inventario, lotes, caja, ventas, clientes, reportes y usuarios autorizados.');
+    }
+
+    private function money(float|int|string|null $amount): string
+    {
+        return $this->business()->simbolo_moneda . ' ' . number_format((float) $amount, 2);
+    }
+
+    private function business(): Configuracion
+    {
+        return $this->businessSettings ??= Configuracion::actual();
     }
 
     private function containsMedicalAdviceRequest(string $mensaje): bool

@@ -14,7 +14,8 @@
 </head>
 <body>
     <div class="header">
-        <h2 style="margin: 0;">REPORTE DE VENTAS - BOTICA</h2>
+        <h2 style="margin: 0;">REPORTE DE VENTAS - {{ mb_strtoupper($configuracion->nombre_comercial) }}</h2>
+        @if($configuracion->ruc)<p style="margin: 4px 0 0 0;">RUC: {{ $configuracion->ruc }}</p>@endif
         <p style="margin: 4px 0 0 0; color: #64748b;">Generado el: {{ date('d/m/Y H:i A') }}</p>
     </div>
 
@@ -39,18 +40,18 @@
                 <td>{{ $v->cliente->nombre_razon_social ?? $v->cliente->nombre ?? 'Cliente Eventual' }}</td>
                 <td>{{ $v->metodo_pago }}</td>
                 <td>{{ ucfirst($v->estado ?? 'completada') }}</td>
-                <td class="text-right">S/ {{ number_format($v->total, 2) }}</td>
-                <td class="text-right">S/ {{ number_format($v->devoluciones_total, 2) }}</td>
-                <td class="text-right">S/ {{ number_format($v->total_neto, 2) }}</td>
+                <td class="text-right">{{ $configuracion->simbolo_moneda }} {{ number_format($v->total, 2) }}</td>
+                <td class="text-right">{{ $configuracion->simbolo_moneda }} {{ number_format($v->devoluciones_total, 2) }}</td>
+                <td class="text-right">{{ $configuracion->simbolo_moneda }} {{ number_format($v->total_neto, 2) }}</td>
             </tr>
             @endforeach
         </tbody>
     </table>
 
     <div class="total-box">
-        Ventas brutas: S/ {{ number_format($resumen['ventas_brutas'], 2) }}<br>
-        Devoluciones: S/ {{ number_format($resumen['devoluciones'], 2) }}<br>
-        Venta neta: S/ {{ number_format($resumen['ventas_netas'], 2) }}<br>
+        Ventas brutas: {{ $configuracion->simbolo_moneda }} {{ number_format($resumen['ventas_brutas'], 2) }}<br>
+        Devoluciones: {{ $configuracion->simbolo_moneda }} {{ number_format($resumen['devoluciones'], 2) }}<br>
+        Venta neta: {{ $configuracion->simbolo_moneda }} {{ number_format($resumen['ventas_netas'], 2) }}<br>
         Ventas anuladas: {{ $resumen['ventas_anuladas'] }}
     </div>
 </body>
