@@ -61,10 +61,14 @@
 
     <div class="ticket">
         <div class="text-center bold">
-            <p>BOTICA L & L</p>
-            <p>RUC: 20123456789</p>
-            <p>Av. Principal #123 - Lima</p>
-            <p>Tel: (01) 456-7890</p>
+            @if($configuracion->logo_url)
+                <img src="{{ $configuracion->logo_url }}" alt="Logo" style="max-width: 80px; max-height: 50px; margin-bottom: 5px;">
+            @endif
+            <p>{{ mb_strtoupper($configuracion->nombre_comercial) }}</p>
+            @if($configuracion->razon_social)<p>{{ $configuracion->razon_social }}</p>@endif
+            @if($configuracion->ruc)<p>RUC: {{ $configuracion->ruc }}</p>@endif
+            @if($configuracion->direccion)<p>{{ $configuracion->direccion }}</p>@endif
+            @if($configuracion->telefono)<p>Tel: {{ $configuracion->telefono }}</p>@endif
         </div>
 
         <div class="divider"></div>
@@ -91,8 +95,8 @@
                     <td colspan="3" class="bold">{{ $detalle->producto->nombre ?? 'Producto' }}</td>
                 </tr>
                 <tr>
-                    <td>{{ $detalle->cantidad }} x S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
-                    <td class="text-right">S/ {{ number_format($detalle->subtotal, 2) }}</td>
+                    <td>{{ $detalle->cantidad }} x {{ $configuracion->simbolo_moneda }} {{ number_format($detalle->precio_unitario, 2) }}</td>
+                    <td class="text-right">{{ $configuracion->simbolo_moneda }} {{ number_format($detalle->subtotal, 2) }}</td>
                 </tr>
                 @if($detalle->asignaciones->isNotEmpty())
                 <tr>
@@ -109,14 +113,13 @@
 
         <div class="bold" style="display: flex; justify-content: space-between;">
             <span>TOTAL:</span>
-            <span>S/ {{ number_format($venta->total, 2) }}</span>
+            <span>{{ $configuracion->simbolo_moneda }} {{ number_format($venta->total, 2) }}</span>
         </div>
 
         <div class="divider"></div>
 
         <div class="text-center" style="margin-top: 8px;">
-            <p>¡Gracias por su preferencia!</p>
-            <p>Conserve su ticket para reclamos.</p>
+            <p>{{ $configuracion->mensaje_ticket }}</p>
         </div>
     </div>
 

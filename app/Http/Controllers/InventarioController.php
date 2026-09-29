@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InventoryMovement;
 use App\Models\Lote;
 use App\Models\Producto;
+use App\Models\Configuracion;
 use App\Services\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -105,7 +106,7 @@ class InventarioController extends Controller
 
     public function porVencer()
     {
-        $limite = Carbon::now()->addDays(60);
+        $limite = Carbon::now()->addDays(Configuracion::actual()->dias_alerta_vencimiento);
         $lotes = Lote::with('producto')
             ->where('stock', '>', 0)
             ->where('fecha_vencimiento', '<=', $limite)

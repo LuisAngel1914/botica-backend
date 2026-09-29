@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Producto;
+use App\Models\Configuracion;
 use Illuminate\Http\Request;
 
 class ProductoController extends Controller
@@ -46,7 +47,7 @@ class ProductoController extends Controller
         $validated['stock_actual'] = 0;
         $validated['condicion_venta'] = $validated['condicion_venta'] ?? (($validated['requiere_receta'] ?? false) ? 'con_receta' : 'libre');
         $validated['requiere_receta'] = $validated['condicion_venta'] !== 'libre';
-        $validated['stock_minimo'] = $validated['stock_minimo'] ?? 5;
+        $validated['stock_minimo'] = $validated['stock_minimo'] ?? Configuracion::actual()->stock_minimo_default;
         $validated['requiere_receta'] = $validated['requiere_receta'] ?? false;
 
         $producto = Producto::create($validated);
@@ -112,9 +113,10 @@ class ProductoController extends Controller
 
     public function alertas()
     {
-        $stockBajo = Producto::whereRaw('stock_actual <= COALESCE(stock_minimo, 5)')->get();
+        $configuracion = Configuracion::actual();
+        $stockBajo = Producto::whereRaw('stock_actual <= COALESCE(stock_minimo, ?)', [$configuracion->stock_minimo_default])->get();
         $hoy = now()->toDateString();
-        $limite = now()->addDays(30)->toDateString();
+        $limite = now()->addDays($configuracion->dias_alerta_vencimiento)->toDateString();
 
         $proximosAVencer = Producto::whereHas('lotes', function ($query) use ($hoy, $limite) {
             $query->where('stock', '>', 0)

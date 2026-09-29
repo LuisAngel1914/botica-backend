@@ -12,10 +12,10 @@
     </style>
 </head>
 <body>
-    <h2>Resumen Diario de Ventas</h2>
+    <h2>Resumen Diario de Ventas - {{ $reporte['configuracion']->nombre_comercial ?? 'Botica' }}</h2>
     
     <div class="resumen">
-        <p><strong>Total General:</strong> S/ {{ number_format($reporte['total_general'] ?? 0, 2) }}</p>
+        <p><strong>Total General:</strong> {{ $reporte['configuracion']->simbolo_moneda ?? 'S/' }} {{ number_format($reporte['total_general'] ?? 0, 2) }}</p>
         <p><strong>Comprobantes Emitidos:</strong> {{ $reporte['cantidad_ventas'] ?? 0 }}</p>
     </div>
 
@@ -36,7 +36,7 @@
                     <td>{{ $venta->numero_comprobante }}</td>
                     <td>{{ $venta->cliente->nombre_razon_social ?? 'Público General' }}</td>
                     <td>{{ $venta->metodo_pago }}</td>
-                    <td class="monto">S/ {{ number_format($venta->total, 2) }}</td>
+                    <td class="monto">{{ $reporte['configuracion']->simbolo_moneda ?? 'S/' }} {{ number_format($venta->total, 2) }}</td>
                 </tr>
                 @endforeach
             @else

@@ -6,6 +6,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use App\Services\ActivityLogger;
+use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -55,5 +58,42 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Sesión cerrada correctamente']);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $data = $request->validate([
+            'password_actual' => 'required|string',
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ]);
+
+        $user = $request->user();
+        if (!Hash::check($data['password_actual'], $user->password)) {
+            throw ValidationException::withMessages([
+                'password_actual' => 'La contraseña actual no es correcta.',
+            ]);
+        }
+
+        if (Hash::check($data['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => 'La nueva contraseña debe ser diferente de la actual.',
+            ]);
+        }
+
+        DB::transaction(function () use ($request, $user, $data) {
+            $currentTokenId = $user->currentAccessToken()?->id;
+            $user->update(['password' => $data['password']]);
+            $otherTokens = $user->tokens();
+            if ($currentTokenId) {
+                $otherTokens->where('id', '!=', $currentTokenId);
+            }
+            $revokedSessions = $otherTokens->delete();
+
+            ActivityLogger::log($request, 'user.password_changed', User::class, $user->id, [
+                'sesiones_revocadas' => $revokedSessions,
+            ]);
+        });
+
+        return response()->json(['message' => 'Contraseña actualizada correctamente.']);
     }
 }

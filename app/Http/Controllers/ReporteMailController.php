@@ -7,6 +7,7 @@ use App\Mail\ReporteDiarioMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
+use App\Models\Configuracion;
 
 class ReporteMailController extends Controller
 {
@@ -26,7 +27,8 @@ class ReporteMailController extends Controller
         $datosReporte = [
             'total_general'   => $ventasHoy->sum('total'),
             'cantidad_ventas' => $ventasHoy->count(),
-            'ventas'          => $ventasHoy
+            'ventas'          => $ventasHoy,
+            'configuracion'   => Configuracion::actual(),
         ];
 
         Mail::to($request->email)->send(new ReporteDiarioMail($datosReporte));

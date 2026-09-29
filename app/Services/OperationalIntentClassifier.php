@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Configuracion;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -62,8 +63,10 @@ class OperationalIntentClassifier
 
     private function instructions(): string
     {
-        return <<<'PROMPT'
-You are an intent classifier for Botica L y L's internal pharmacy operations system.
+        $businessName = Configuracion::actual()->nombre_comercial;
+
+        return <<<PROMPT
+You are an intent classifier for {$businessName}'s internal pharmacy operations system.
 Return only JSON: {"intent":"one_allowed_value"}.
 Allowed values:
 - cash_status: cash register status, cash, expected amount, opening.
@@ -73,7 +76,7 @@ Allowed values:
 - client_lookup: a customer lookup by document.
 - users_summary: system users or employees.
 - catalog: product, price, active ingredient, presentation, availability.
-- other: anything unrelated to the Botica L y L system.
+- other: anything unrelated to the {$businessName} system.
 Never provide clinical or medical advice, execute changes, or infer an intent outside this list.
 PROMPT;
     }
