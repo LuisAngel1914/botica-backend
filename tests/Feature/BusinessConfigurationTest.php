@@ -63,6 +63,45 @@ class BusinessConfigurationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_internal_ticket_is_clearly_identified_and_marks_cancelled_sales(): void
+    {
+        $configuracion = Configuracion::actual();
+        $configuracion->forceFill([
+            'razon_social' => 'Auqui Vila Luz María',
+            'ruc' => '10432182083',
+            'direccion' => 'Av. A Mz. 147 Lt. 2A',
+            'telefono' => '964420960',
+            'email' => 'contacto@botica.test',
+        ]);
+
+        $venta = (object) [
+            'id' => 7,
+            'numero_comprobante' => 'B001-000007',
+            'estado' => 'anulada',
+            'created_at' => now(),
+            'cliente' => null,
+            'metodo_pago' => 'Efectivo',
+            'total' => 4,
+            'detalles' => collect([
+                (object) [
+                    'producto' => (object) ['nombre' => 'Amoxicilina 500gr'],
+                    'cantidad' => 1,
+                    'precio_unitario' => 4,
+                    'subtotal' => 4,
+                    'asignaciones' => collect(),
+                ],
+            ]),
+        ];
+
+        $html = view('tickets.venta', compact('venta', 'configuracion'))->render();
+
+        $this->assertStringContainsString('TICKET INTERNO DE VENTA', $html);
+        $this->assertStringContainsString('SIN VALIDEZ TRIBUTARIA', $html);
+        $this->assertStringContainsString('VENTA ANULADA', $html);
+        $this->assertStringContainsString('No reemplaza una boleta de venta autorizada', $html);
+        $this->assertStringContainsString('Auqui Vila Luz María', $html);
+    }
+
     public function test_any_authenticated_user_can_change_own_password(): void
     {
         $cashier = User::factory()->create([
