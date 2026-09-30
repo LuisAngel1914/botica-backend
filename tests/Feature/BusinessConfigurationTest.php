@@ -96,7 +96,7 @@ class BusinessConfigurationTest extends TestCase
         $html = view('tickets.venta', compact('venta', 'configuracion'))->render();
 
         $this->assertStringContainsString('TICKET INTERNO DE VENTA', $html);
-        $this->assertStringContainsString('SIN VALIDEZ TRIBUTARIA', $html);
+        $this->assertStringNotContainsString('SIN VALIDEZ TRIBUTARIA', $html);
         $this->assertStringContainsString('VENTA ANULADA', $html);
         $this->assertStringContainsString('No reemplaza una boleta de venta autorizada', $html);
         $this->assertStringContainsString('Auqui Vila Luz María', $html);

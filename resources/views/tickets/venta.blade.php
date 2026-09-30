@@ -36,8 +36,7 @@
         }
         .business-name { font-size: 14px; font-weight: 800; }
         .document-label { margin: 2mm 0 1mm; font-size: 13px; font-weight: 800; letter-spacing: .04em; }
-        .tax-warning, .status-warning { border: 1px solid #111827; padding: 1.5mm 2mm; font-weight: 800; text-align: center; }
-        .tax-warning { margin-top: 1.5mm; }
+        .status-warning { border: 1px solid #111827; padding: 1.5mm 2mm; font-weight: 800; text-align: center; }
         .status-warning { margin: 0 0 2mm; }
         .muted { color: #4b5563; }
         .text-center { text-align: center; }
@@ -70,7 +69,6 @@
             @if($configuracion->telefono)<p>Tel: {{ $configuracion->telefono }}</p>@endif
             @if($configuracion->email)<p>{{ $configuracion->email }}</p>@endif
             <p class="document-label">TICKET INTERNO DE VENTA</p>
-            <p class="tax-warning">SIN VALIDEZ TRIBUTARIA</p>
         </header>
 
         <div class="divider"></div>
