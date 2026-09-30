@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Ticket #{{ $venta->numero_comprobante }}</title>
+    <title>Boleta demostrativa {{ $venta->numero_comprobante }}</title>
     <style>
         * {
             margin: 0;
@@ -29,6 +29,16 @@
         .text-center { text-align: center; }
         .text-right { text-align: right; }
         .bold { font-weight: bold; }
+
+        .demo-banner {
+            border: 2px solid #000;
+            margin: 8px 0;
+            padding: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .small { font-size: 9px; line-height: 1.35; }
 
         .divider {
             border-top: 1px dashed #000;
@@ -74,9 +84,18 @@
         <div class="divider"></div>
 
         <div class="text-center bold">
-            <p>{{ $venta->numero_comprobante }}</p>
+            <p>BOLETA DE VENTA ELECTRÓNICA</p>
+            <p>{{ $venta->comprobante?->numero ?? $venta->numero_comprobante }}</p>
             <p>Fecha: {{ \Carbon\Carbon::parse($venta->created_at)->format('d/m/Y H:i') }}</p>
         </div>
+
+        @if($venta->comprobante?->modo === 'demo')
+            <div class="demo-banner">
+                MODO PRUEBAS<br>
+                SIN VALIDEZ TRIBUTARIA<br>
+                NO ENVIADO A SUNAT
+            </div>
+        @endif
 
         <div class="divider"></div>
 
@@ -116,10 +135,21 @@
             <span>{{ $configuracion->simbolo_moneda }} {{ number_format($venta->total, 2) }}</span>
         </div>
 
+        <div class="small" style="margin-top: 6px;">
+            <p>Régimen: {{ $configuracion->regimen_tributario ?? 'NRUS' }}</p>
+            <p>Estado: {{ mb_strtoupper(str_replace('_', ' ', $venta->comprobante?->estado ?? 'sin comprobante')) }}</p>
+            @if($venta->comprobante?->hash)
+                <p>Huella: {{ substr($venta->comprobante->hash, 0, 16) }}</p>
+            @endif
+        </div>
+
         <div class="divider"></div>
 
         <div class="text-center" style="margin-top: 8px;">
             <p>{{ $configuracion->mensaje_ticket }}</p>
+            @if($venta->comprobante?->modo === 'demo')
+                <p class="small" style="margin-top: 6px;">Representación demostrativa para evaluación de la propuesta. La activación productiva requerirá credenciales y configuración oficial.</p>
+            @endif
         </div>
     </div>
 

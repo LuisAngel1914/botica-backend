@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use App\Services\ActivityLogger;
+use App\Services\ElectronicReceiptService;
 
 class VentaController extends Controller
 {
@@ -37,6 +38,7 @@ class VentaController extends Controller
             'detalles.asignaciones.lote',
             'detalles.devoluciones.asignaciones',
             'devoluciones.detalles',
+            'comprobante.eventos',
         ])->orderByDesc('id');
 
         if (!empty($data['fecha_inicio'])) {
@@ -90,7 +92,7 @@ class VentaController extends Controller
         return DB::transaction(function () use ($request, $userId) {
             DB::table('operational_locks')->where('name', 'cash_register')->lockForUpdate()->firstOrFail();
 
-            $ventaExistente = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
+            $ventaExistente = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote', 'comprobante.eventos'])
                 ->where('usuario_id', $userId)
                 ->where('idempotency_key', $request->idempotency_key)
                 ->first();
@@ -219,10 +221,6 @@ class VentaController extends Controller
                 'idempotency_key'     => $request->idempotency_key,
             ]);
 
-            $venta->update([
-                'numero_comprobante' => Configuracion::actual()->serie_comprobante . '-' . str_pad($venta->id, 6, '0', STR_PAD_LEFT),
-            ]);
-
             foreach ($detallesParaInsertar as $detalle) {
                 $asignaciones = $detalle['asignaciones'];
                 unset($detalle['asignaciones'], $detalle['condicion_venta']);
@@ -264,6 +262,8 @@ class VentaController extends Controller
                 ]);
             }
 
+            app(ElectronicReceiptService::class)->createDemoForSale($venta, $userId);
+
             ActivityLogger::log($request, 'sale.created', Venta::class, $venta->id, ['total' => (float) $venta->total, 'metodo_pago' => $venta->metodo_pago, 'items' => count($detallesParaInsertar), 'lotes_asignados' => true]);
 
             return response()->json([
@@ -271,7 +271,7 @@ class VentaController extends Controller
                 'venta_id' => $venta->id,
                 'id'       => $venta->id,
                 'idempotent' => false,
-                'data'     => $venta->load(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])
+                'data'     => $venta->load(['cliente', 'detalles.producto', 'detalles.asignaciones.lote', 'comprobante.eventos'])
             ], 201);
         });
     }
@@ -281,7 +281,7 @@ class VentaController extends Controller
         $data = $request->validate(['motivo' => 'required|string|min:10|max:1000']);
         return DB::transaction(function () use ($id, $request, $data) {
             // La misma venta se bloquea también desde la devolución para impedir dobles restituciones.
-            $venta = Venta::query()->lockForUpdate()->find($id);
+            $venta = Venta::query()->with('comprobante')->lockForUpdate()->find($id);
 
             if ($venta) {
                 $venta->load('detalles.asignaciones.lote');
@@ -352,6 +352,7 @@ class VentaController extends Controller
             }
 
             $venta->update(['estado' => 'anulada']);
+            app(ElectronicReceiptService::class)->markDemoCancelled($venta, $request->user()->id, $data['motivo']);
 
             ActivityLogger::log($request, 'sale.cancelled', Venta::class, $venta->id, ['total' => (float) $venta->total, 'motivo' => $data['motivo'], 'lotes_restaurados' => true]);
 
@@ -411,7 +412,7 @@ class VentaController extends Controller
 
     public function ticket(Request $request, $id)
     {
-        $venta = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote'])->find($id);
+        $venta = Venta::with(['cliente', 'detalles.producto', 'detalles.asignaciones.lote', 'comprobante.eventos'])->find($id);
 
         if (!$venta) {
             return response()->json(['message' => 'Venta no encontrada'], 404);

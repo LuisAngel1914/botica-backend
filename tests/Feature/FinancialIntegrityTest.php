@@ -55,8 +55,8 @@ class FinancialIntegrityTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->assertSame('B001-' . str_pad($primeraVenta['id'], 6, '0', STR_PAD_LEFT), $primeraVenta['numero_comprobante']);
-        $this->assertSame('B001-' . str_pad($segundaVenta['id'], 6, '0', STR_PAD_LEFT), $segundaVenta['numero_comprobante']);
+        $this->assertSame('B001-00000001', $primeraVenta['numero_comprobante']);
+        $this->assertSame('B001-00000002', $segundaVenta['numero_comprobante']);
         $this->assertNotSame($primeraVenta['numero_comprobante'], $segundaVenta['numero_comprobante']);
     }
 

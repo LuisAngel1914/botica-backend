@@ -18,6 +18,11 @@ class Venta extends Model
         'idempotency_key',
     ];
 
+    public function comprobante()
+    {
+        return $this->hasOne(ComprobanteElectronico::class, 'venta_id');
+    }
+
     // Relación con el cliente asignado a la venta
     public function cliente()
     {
